@@ -1,0 +1,8 @@
+.env
+.env.dev
+.env.prod
+view/node_modules/*
+view/package-lock.json
+view/package.json
+shopify.app*.toml
+bootstrap
