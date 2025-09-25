@@ -1,7 +1,7 @@
 <a name="readme-top"></a>
 
 <h2 align="center">
-    <a href="https://www.onyx.app/"> <img width="50%" src="https://github.com/onyx-dot-app/onyx/blob/logo/OnyxLogoCropped.jpg?raw=true)" /></a>
+    <a href="https://www.onyx.app/"> <img width="50%" src="https://typewriting.ai/Typewriting-logo.jpg" /></a>
 </h2>
 
 <p align="center">Open Source SaaS application boilerplate</p>
