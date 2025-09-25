@@ -32,6 +32,7 @@ func (ac *ApiController) RegisterApiRoutes() {
 		apiGroup.POST("/verify", ac.Verify)
 		apiGroup.GET("/workspaces", ac.GetWorkspaces)
 		apiGroup.GET("/workspaces/:page_no", ac.GetWorkspaces)
+		apiGroup.GET("/workspaces/add", ac.AddNewWorkspace)
 		apiGroup.GET("/welcome", ac.ApiWelcome)
 	}
 }
@@ -158,11 +159,68 @@ func (ac *ApiController) GetWorkspaces(c *gin.Context) {
 		//do nothing
 	}
 
+	fmt.Println("Workspaces fetched:", workspaces)
+	var workspacesOut []map[string]interface{}
+	if workspaces == nil {
+		workspacesOut = []map[string]interface{}{}
+	} else {
+		workspacesOut = workspaces
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"status":       "success",
-		"workspaces":   workspaces,
+		"workspaces":   workspacesOut,
 		"limit":        20,
 		"subscription": subscription,
+	})
+}
+
+func (ac *ApiController) AddNewWorkspace(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+
+	var content struct {
+		Title string              `json:"title"`
+		Metas map[string][]string `json:"metas"`
+	}
+	if err := c.BindJSON(&content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail"})
+		return
+	}
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":     "fail",
+			"workspaces": nil,
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+
+	blockData := map[string]interface{}{
+		"type":    "workspace",
+		"title":   content.Title,
+		"content": "",
+		"parent":  0,
+	}
+
+	block, err := databaseManager.AddBlock(userID, blockData, "")
+	if err != nil || block == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+			"block":  nil,
+		})
+		return
+	}
+
+	privileges := []string{"admin"}
+	databaseManager.AddMeta(ac.db, "workspace", block["id"].(int64), fmt.Sprintf("privilege_%d", userID), privileges)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"block":  block,
 	})
 }
 
@@ -235,43 +293,6 @@ func (ac *ApiController) DeleteThread(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": map[bool]string{true: "success", false: "fail"}[deleted],
-	})
-}
-
-func (ac *ApiController) AddNewWorkspace(c *gin.Context) {
-	domain := c.GetHeader("X-Vuedoo-Domain")
-	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
-
-	var content struct {
-		Title string              `json:"title"`
-		Metas map[string][]string `json:"metas"`
-	}
-	if err := c.BindJSON(&content); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "fail"})
-		return
-	}
-
-	userID := getCurrentUser(ac.db, domain, accessKey)
-	blockData := map[string]interface{}{
-		"type":    "workspace",
-		"title":   content.Title,
-		"content": "",
-		"parent":  0,
-	}
-
-	block := addBlock(ac.db, userID, blockData)
-
-	if block != nil && content.Metas["questionnaire"] != nil && content.Metas["questionnaire"][0] != "" {
-		addMeta(ac.db, "workspace", block["id"].(int64), "collect_information", "true")
-		addMeta(ac.db, "workspace", block["id"].(int64), "questionnaire", content.Metas["questionnaire"])
-	}
-
-	privileges := []string{"admin"}
-	addMeta(ac.db, "workspace", block["id"].(int64), fmt.Sprintf("privilege_%d", userID), privileges)
-
-	c.JSON(http.StatusOK, gin.H{
-		"status": "success",
-		"block":  block,
 	})
 }
 

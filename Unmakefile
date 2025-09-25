@@ -1,3 +1,0 @@
-deploy: 
-	cp .env.dev .env
-	go build -o app main.go

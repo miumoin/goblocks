@@ -280,9 +280,21 @@ func (dm *DatabaseManager) AddBlock(userID int64, block map[string]interface{}, 
 func (dm *DatabaseManager) GetBlocks(userID int64, blockType string, page, entriesPerPage, parent int) ([]map[string]interface{}, error) {
 	offset := (page - 1) * entriesPerPage
 
-	query := "SELECT id, type, title, content, author, slug, parent, created_at, modified_at FROM blocks WHERE ( author = ? OR id IN ( SELECT parent_id FROM metas WHERE parent = ? AND meta_key = ? ) ) ) AND type = ? AND status = 1"
-	args := []interface{}{userID, blockType, blockType, "privilege_" + strconv.FormatInt(userID, 10)}
-
+	query := `
+SELECT id, type, title, content, author, slug, parent, created_at, modified_at
+FROM blocks
+WHERE (author = ? OR id IN (
+    SELECT parent_id FROM metas
+    WHERE parent = ? AND meta_key = ?
+))
+AND type = ? AND status = 1
+`
+	args := []interface{}{
+		userID,
+		blockType,
+		"privilege_" + strconv.FormatInt(userID, 10),
+		blockType,
+	}
 	if parent > 0 {
 		query += " AND parent = ?"
 		args = append(args, parent)
@@ -319,9 +331,7 @@ func (dm *DatabaseManager) GetBlocks(userID int64, blockType string, page, entri
 		})
 	}
 
-	if len(blocks) == 0 {
-		return nil, nil
-	}
+	fmt.Println("Fetched blocks:", blocks)
 
 	return blocks, nil
 }
