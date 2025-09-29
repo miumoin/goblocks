@@ -67,7 +67,7 @@ For feature details, check out [our website](https://typewriting.ai).
 
 
 ## 👪 Community
-Join our open source community on **[Discord](https://discord.gg/TDJ59cGV2X)**!
+Join our community on **[Discord](https://discord.gg/tqbH6Svz8k)**!
 
 
 

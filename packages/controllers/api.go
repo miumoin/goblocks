@@ -32,7 +32,10 @@ func (ac *ApiController) RegisterApiRoutes() {
 		apiGroup.POST("/verify", ac.Verify)
 		apiGroup.GET("/workspaces", ac.GetWorkspaces)
 		apiGroup.GET("/workspaces/:page_no", ac.GetWorkspaces)
-		apiGroup.GET("/workspaces/add", ac.AddNewWorkspace)
+		apiGroup.POST("/workspaces/add", ac.AddNewWorkspace)
+		apiGroup.GET("/workspace/:slug", ac.GetWorkspace)
+		apiGroup.POST("/workspace/:slug/update", ac.UpdateWorkspace)
+		apiGroup.GET("/workspace/:slug/threads/:page", ac.GetThreads)
 		apiGroup.GET("/welcome", ac.ApiWelcome)
 	}
 }
@@ -145,7 +148,7 @@ func (ac *ApiController) GetWorkspaces(c *gin.Context) {
 	utils := services.NewUtilities(ac.db)
 
 	//workspaces, limit, err := utils.GetWorkspaces(*databaseManager, 20)
-	workspaces, err := databaseManager.GetBlocks(userID, "workspaces", page, 20, 0)
+	workspaces, err := databaseManager.GetBlocks(userID, "workspace", page, 20, 0)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"status":     "fail",
@@ -159,7 +162,6 @@ func (ac *ApiController) GetWorkspaces(c *gin.Context) {
 		//do nothing
 	}
 
-	fmt.Println("Workspaces fetched:", workspaces)
 	var workspacesOut []map[string]interface{}
 	if workspaces == nil {
 		workspacesOut = []map[string]interface{}{}
@@ -207,7 +209,8 @@ func (ac *ApiController) AddNewWorkspace(c *gin.Context) {
 	}
 
 	block, err := databaseManager.AddBlock(userID, blockData, "")
-	if err != nil || block == nil {
+	fmt.Println("AddNewWorkspace - block:", block, " err:", err)
+	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"status": "fail",
 			"block":  nil,
@@ -216,7 +219,7 @@ func (ac *ApiController) AddNewWorkspace(c *gin.Context) {
 	}
 
 	privileges := []string{"admin"}
-	databaseManager.AddMeta(ac.db, "workspace", block["id"].(int64), fmt.Sprintf("privilege_%d", userID), privileges)
+	databaseManager.AddMeta("workspace", block["id"].(int64), fmt.Sprintf("privilege_%d", userID), privileges)
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
@@ -224,32 +227,84 @@ func (ac *ApiController) AddNewWorkspace(c *gin.Context) {
 	})
 }
 
-/*
-func (ac *ApiController) GetThreads(c *gin.Context) {
+func (ac *ApiController) GetWorkspace(c *gin.Context) {
 	domain := c.GetHeader("X-Vuedoo-Domain")
 	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
 	slug := c.Param("slug")
 	page := c.Param("page")
 
-	var threads interface{}
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":     "fail",
+			"workspaces": nil,
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+
 	if slug != "" {
-		workspace := getWorkspace(ac.db, slug, domain, accessKey)
-		if workspace != nil {
-			var privileges []string
-			if err := json.Unmarshal([]byte(workspace["meta_value"].(string)), &privileges); err == nil {
-				if contains(privileges, "admin") {
-					threads = getWorkspaceProfiles(ac.db, workspace, page)
-				}
-			}
+		workspace, err := databaseManager.GetBlock(userID, "workspace", 0, slug, 0)
+		if workspace != nil && err == nil {
+			c.JSON(http.StatusOK, gin.H{
+				"status":    "success",
+				"workspace": workspace,
+				"page":      page,
+				"limit":     20,
+				"threads":   []map[string]interface{}{},
+			})
+		}
+	} else {
+		c.JSON(http.StatusOK, gin.H{
+			"status":    "fail",
+			"workspace": map[string]interface{}{},
+			"threads":   []map[string]interface{}{},
+		})
+	}
+}
+
+func (ac *ApiController) GetThreads(c *gin.Context) {
+	//domain := c.GetHeader("X-Vuedoo-Domain")
+	//accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+	//slug := c.Param("slug")
+	//page := c.Param("page")
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"threads": []map[string]interface{}{},
+	})
+}
+
+func (ac *ApiController) UpdateWorkspace(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+	slug := c.Param("slug")
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":     "fail",
+			"workspaces": nil,
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+
+	if slug != "" {
+		workspace, err := databaseManager.GetBlock(userID, "workspace", 0, slug, 0)
+		if workspace != nil && err == nil {
+			databaseManager.AddMeta("workspace", workspace["id"].(int64), "last_updated_by", userID)
 		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status":  map[bool]string{true: "success", false: "fail"}[workspace != nil],
-		"threads": threads,
+		"status": "success",
 	})
 }
 
+/*
 func (ac *ApiController) AddNewThread(c *gin.Context) {
 	domain := c.GetHeader("X-Vuedoo-Domain")
 	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
@@ -351,29 +406,6 @@ func (ac *ApiController) GetWorkspaceBySlug(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":    map[bool]string{true: "success", false: "fail"}[workspace != nil],
 		"workspace": workspace,
-	})
-}
-
-func (ac *ApiController) UpdateWorkspace(c *gin.Context) {
-	domain := c.GetHeader("X-Vuedoo-Domain")
-	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
-	slug := c.Param("slug")
-
-	var updated bool
-	if slug != "" {
-		workspace := getWorkspace(ac.db, slug, domain, accessKey)
-		if workspace != nil {
-			var privileges []string
-			if err := json.Unmarshal([]byte(workspace["meta_value"].(string)), &privileges); err == nil {
-				if contains(privileges, "admin") {
-					updated = updateWorkspaceDetails(ac.db, workspace, c.Request)
-				}
-			}
-		}
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"status": map[bool]string{true: "success", false: "fail"}[updated],
 	})
 }
 */

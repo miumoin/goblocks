@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,15 +15,15 @@ import (
 )
 
 type BlockType struct {
-	ID         int
+	ID         int64
 	Type       string // Changed 'type' to 'blockType' since 'type' is a reserved keyword
 	Title      string
 	Content    string
-	Author     int
+	Author     int64
 	Slug       string
-	Parent     *int
-	CreatedAt  time.Time
-	ModifiedAt time.Time
+	Parent     *int64
+	CreatedAt  string
+	ModifiedAt string
 	Status     int
 	SystemID   int64
 }
@@ -211,15 +212,15 @@ func (dm *DatabaseManager) GetMeta(parent string, parentID int, key string) (str
 }
 
 type Block struct {
-	ID         int       `json:"id"`
-	Type       string    `json:"type"`
-	Title      string    `json:"title"`
-	Content    string    `json:"content"`
-	Author     int       `json:"author"`
-	Slug       string    `json:"slug"`
-	Parent     *int      `json:"parent"`
-	CreatedAt  time.Time `json:"created_at"`
-	ModifiedAt time.Time `json:"modified_at"`
+	ID         int64  `json:"id"`
+	Type       string `json:"type"`
+	Title      string `json:"title"`
+	Content    string `json:"content"`
+	Author     int    `json:"author"`
+	Slug       string `json:"slug"`
+	Parent     *int64 `json:"parent"`
+	CreatedAt  string `json:"created_at"`
+	ModifiedAt string `json:"modified_at"`
 }
 
 func (dm *DatabaseManager) AddBlock(userID int64, block map[string]interface{}, slug string) (map[string]interface{}, error) {
@@ -234,23 +235,28 @@ func (dm *DatabaseManager) AddBlock(userID int64, block map[string]interface{}, 
 	if err == nil {
 		_, err = dm.db.Exec(
 			"UPDATE blocks SET title = ?, content = ?, modified_at = ? WHERE slug = ?",
-			block["title"], block["content"], now, slug,
+			block["title"], block["content"], now.Format("2006-01-02 15:04:05"), slug,
 		)
 		if err != nil {
 			return nil, err
 		}
 	} else if err == sql.ErrNoRows {
-		var parentPtr *int
-		if parent, ok := block["parent"].(int); ok {
-			parentPtr = &parent
+		parentPtr := int64(0)
+		if p, ok := block["parent"].(int); ok {
+			parentPtr = int64(p)
 		}
-		_, err = dm.db.Exec(
+
+		res, err := dm.db.Exec(
 			"INSERT INTO blocks (type, title, content, author, slug, parent, created_at, modified_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)",
-			block["type"], block["title"], block["content"], userID, slug, parentPtr, now, now,
+			block["type"], block["title"], block["content"], userID, slug, parentPtr,
+			now.Format("2006-01-02 15:04:05"), now.Format("2006-01-02 15:04:05"),
 		)
 		if err != nil {
 			return nil, err
 		}
+
+		rows, _ := res.RowsAffected()
+		fmt.Println("Inserted rows:", rows)
 	} else {
 		return nil, err
 	}
@@ -272,18 +278,18 @@ func (dm *DatabaseManager) AddBlock(userID int64, block map[string]interface{}, 
 		"author":      b.Author,
 		"slug":        b.Slug,
 		"parent":      b.Parent,
-		"created_at":  b.CreatedAt.Format("2006-01-02 15:04:05"),
-		"modified_at": b.ModifiedAt.Format("2006-01-02 15:04:05"),
+		"created_at":  FormatTimeToISO(b.CreatedAt),
+		"modified_at": FormatTimeToISO(b.ModifiedAt),
 	}, nil
 }
 
-func (dm *DatabaseManager) GetBlocks(userID int64, blockType string, page, entriesPerPage, parent int) ([]map[string]interface{}, error) {
+func (dm *DatabaseManager) GetBlocks(userID int64, blockType string, page int, entriesPerPage int, parent int64) ([]map[string]interface{}, error) {
 	offset := (page - 1) * entriesPerPage
 
 	query := `
 SELECT id, type, title, content, author, slug, parent, created_at, modified_at
 FROM blocks
-WHERE (author = ? OR id IN (
+WHERE ( author = ? OR id IN (
     SELECT parent_id FROM metas
     WHERE parent = ? AND meta_key = ?
 ))
@@ -317,6 +323,7 @@ AND type = ? AND status = 1
 			log.Println(err)
 			continue
 		}
+
 		blocks = append(blocks, map[string]interface{}{
 			"id":          int64(b.ID),
 			"type":        b.Type,
@@ -325,20 +332,26 @@ AND type = ? AND status = 1
 			"author":      int64(b.Author),
 			"slug":        b.Slug,
 			"parent":      b.Parent,
-			"created_at":  b.CreatedAt.Format("2006-01-02 15:04:05"),
-			"modified_at": b.ModifiedAt.Format("2006-01-02 15:04:05"),
+			"created_at":  FormatTimeToISO(b.CreatedAt),
+			"modified_at": FormatTimeToISO(b.ModifiedAt),
 			"metas":       map[string]string{},
 		})
 	}
 
-	fmt.Println("Fetched blocks:", blocks)
-
 	return blocks, nil
 }
 
-func (dm *DatabaseManager) GetBlock(userID int64, blockType string, id int, slug string, parent int) (map[string]interface{}, error) {
-	query := "SELECT id, type, title, content, author, slug, parent, created_at, modified_at FROM blocks WHERE status > 0 AND author = ?"
-	args := []interface{}{userID}
+func FormatTimeToISO(mysqlTime string) string {
+	t, err := time.Parse("2006-01-02 15:04:05", mysqlTime)
+	if err != nil {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
+}
+
+func (dm *DatabaseManager) GetBlock(userID int64, blockType string, id int64, slug string, parent int64) (map[string]interface{}, error) {
+	query := "SELECT id, type, title, content, author, slug, parent, created_at, modified_at FROM blocks WHERE status > 0 AND ( author = ? OR id IN ( SELECT parent_id FROM metas WHERE parent = ? AND meta_key = ? ) )"
+	args := []interface{}{userID, blockType, "privilege_" + strconv.FormatInt(userID, 10)}
 
 	if blockType != "" {
 		query += " AND type = ?"
@@ -357,7 +370,7 @@ func (dm *DatabaseManager) GetBlock(userID int64, blockType string, id int, slug
 		args = append(args, parent)
 	}
 
-	var b Block
+	var b BlockType
 	err := dm.db.QueryRow(query, args...).Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -374,8 +387,8 @@ func (dm *DatabaseManager) GetBlock(userID int64, blockType string, id int, slug
 		"author":      b.Author,
 		"slug":        b.Slug,
 		"parent":      b.Parent,
-		"created_at":  b.CreatedAt.Format("2006-01-02 15:04:05"),
-		"modified_at": b.ModifiedAt.Format("2006-01-02 15:04:05"),
+		"created_at":  FormatTimeToISO(b.CreatedAt),
+		"modified_at": FormatTimeToISO(b.ModifiedAt),
 	}
 
 	children, err := dm.GetBlocks(userID, "entry", 1, 999999, b.ID)
@@ -383,10 +396,40 @@ func (dm *DatabaseManager) GetBlock(userID int64, blockType string, id int, slug
 		result["children"] = children
 	}
 
+	metas, metaErr := dm.GetMetas(b.ID, b.Type, []string{})
+	if metaErr == nil && metas != nil {
+		result["metas"] = metas
+	}
+
 	return result, nil
 }
 
-func (dm *DatabaseManager) DeleteBlock(id int) error {
+func (dm *DatabaseManager) GetMetas(id int64, parent string, metaKeys []string) (map[string]string, error) {
+	var query string
+	if len(metaKeys) > 0 {
+		query = "SELECT meta_key, meta_value FROM metas WHERE parent = ? AND parent_id = ? AND meta_key IN (?" + strings.Repeat(",?", len(metaKeys)-1) + ")"
+	} else {
+		query = "SELECT meta_key, meta_value FROM metas WHERE parent = ? AND parent_id = ?"
+	}
+	rows, err := dm.db.Query(query, parent, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	metas := make(map[string]string)
+	for rows.Next() {
+		var key, value string
+		if err := rows.Scan(&key, &value); err != nil {
+			return nil, err
+		}
+		metas[key] = value
+	}
+
+	return metas, nil
+}
+
+func (dm *DatabaseManager) DeleteBlock(id int64) error {
 	_, err := dm.db.Exec("UPDATE blocks SET status = 0 WHERE id = ?", id)
 	return err
 }

@@ -48,7 +48,7 @@ const Home: React.FC = () => {
 
     useEffect(() => {
         if( data.isLoaded && data.page < 1 && data.workspaces.length < 1 ) {
-            window.location.href = App.base + '/organization/new';
+            //window.location.href = App.base + '/organization/new';
         }
     }, [data.workspaces]);
 
@@ -108,8 +108,9 @@ const Home: React.FC = () => {
         }
     };
 
-    function formatDate(json: { date: string; timezone: string }): string {
-        const utcDate = new Date(json.date + 'Z'); // Append 'Z' to handle UTC
+    function formatDate(date: string): string {
+        const utcDate = new Date(date); // Append 'Z' to handle UTC
+        console.log(date);
         
         const day = utcDate.getUTCDate();
         const suffix = (day % 10 === 1 && day !== 11) ? 'st' 
@@ -170,7 +171,7 @@ const Home: React.FC = () => {
                                                             &nbsp;
                                                             -
                                                             &nbsp;
-                                                            Added on {formatDate( workspace.created_at )}
+                                                            Added on {formatDate( workspace.created_at,  )}
                                                         </span>
                                                     </small>
                                                 </p>
