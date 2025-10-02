@@ -281,6 +281,20 @@ func (ac *ApiController) UpdateWorkspace(c *gin.Context) {
 	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
 	slug := c.Param("slug")
 
+	var request struct {
+		Stripe_secret_key string `json:"stripe_secret_key"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "Invalid request body",
+		})
+		return
+	}
+
+	fmt.Println("UpdateWorkspace - request:", request)
+
 	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
 	if dErr != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -295,7 +309,7 @@ func (ac *ApiController) UpdateWorkspace(c *gin.Context) {
 	if slug != "" {
 		workspace, err := databaseManager.GetBlock(userID, "workspace", 0, slug, 0)
 		if workspace != nil && err == nil {
-			databaseManager.AddMeta("workspace", workspace["id"].(int64), "last_updated_by", userID)
+			databaseManager.AddMeta("workspace", workspace["id"].(int64), "stripe_secret_key", request.Stripe_secret_key)
 		}
 	}
 

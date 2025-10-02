@@ -346,11 +346,6 @@ const Organization: React.FC = () => {
                                         <div className="d-flex justify-content-between align-items-center border-bottom pb-2 mb-0">
                                             <h6>
                                                 {data.workspace.title}
-                                                <OverlayTrigger placement="top" overlay={<Tooltip>Share your contact link.</Tooltip>} >
-                                                    <a href="javascript:void(0)" data-toggle="modal" data-target="#knowledge" onClick={() => triggerShare()} className="btn btn-sm btn-link">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"  strokeLinecap="round"  strokeLinejoin="round" className="icon icon-tabler icons-tabler-outline icon-tabler-copy" style={{position: 'relative', 'top': '-2px'}}><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M6 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M18 6m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M18 18m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M8.7 10.7l6.6 -3.4" /><path d="M8.7 13.3l6.6 3.4" /></svg>
-                                                    </a>
-                                                </OverlayTrigger>
                                                 { data.workspace.metas?.collect_information === 'true' &&
                                                     <OverlayTrigger placement="top" overlay={<Tooltip>Download collected information from the chats.</Tooltip>}>
                                                         <a href="javascript:void(0)" onClick={() => downloadEntries()} className="btn btn-sm btn-link me-0" style={{paddingLeft: '3px'}}>
@@ -369,21 +364,12 @@ const Organization: React.FC = () => {
                                                         </span>
                                                     </Link>
                                                 </OverlayTrigger>
-                                                <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip-top">Upload your project’s common files to the Knowledge Hub to power AI-driven responses and text generation.</Tooltip>} >
-                                                    <Link className="btn btn-sm btn-outline-primary me-2" to={'/organization/' + data.workspace.slug + '/knowledge'}>
-                                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="icon icon-tabler icons-tabler-outline icon-tabler-book" style={{position: 'relative', top: '-2px'}}><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0" /><path d="M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0" /><path d="M3 6l0 13" /><path d="M12 6l0 13" /><path d="M21 6l0 13" /></svg>
-                                                        <span className="d-none d-sm-inline">
-                                                            &nbsp;
-                                                            Knowledge hub
-                                                        </span>
-                                                    </Link>
-                                                </OverlayTrigger>
                                                 <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip-top">Start a new conversation with a unique URL and custom knowledge tailored for the contact.</Tooltip>} >
                                                     <button className="btn btn-sm btn-outline-primary me-2" data-toggle="modal" data-target="#knowledge" onClick={() => triggerShare()}>
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="icon icon-tabler icons-tabler-outline icon-tabler-square-rounded-plus" style={{position: 'relative', top: '-2px'}}><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M6 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M18 6m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M18 18m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M8.7 10.7l6.6 -3.4" /><path d="M8.7 13.3l6.6 3.4" /></svg>
                                                         <span className="d-none d-sm-inline">
                                                             &nbsp;
-                                                            Publish
+                                                            Create a invoice
                                                         </span>
                                                     </button>
                                                 </OverlayTrigger>
@@ -454,7 +440,7 @@ const Organization: React.FC = () => {
                                                 <svg style={{width: '80px', height: '80px', cursor: 'pointer'}} viewBox="0 0 24 24" fill="none" stroke="#6c757d" strokeWidth="2"  strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg" data-toggle="modal" data-target="#knowledge" onClick={() => setData((prevData) => ({ ...prevData, sharingShow: true }))}>
                                                     <path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M6 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M18 6m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M18 18m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M8.7 10.7l6.6 -3.4" /><path d="M8.7 13.3l6.6 3.4" />
                                                 </svg>
-                                                <p className="text-muted mt-3" style={{maxWidth: '600px'}}>Share the common project URL with your audience to let them contact you, or create manually to share a specific chat.</p>
+                                                <p className="text-muted mt-3" style={{maxWidth: '600px'}}>Create a custom invoice and share with your customer, once customer visits the url, it will be displayed here.</p>
                                             </div>
                                         }
                                     </>

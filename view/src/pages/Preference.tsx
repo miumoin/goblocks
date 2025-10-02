@@ -98,7 +98,7 @@ const Preference: React.FC = () => {
                         'X-Vuedoo-Domain': App.domain,
                         'X-Vuedoo-Access-Key': data.accessKey
                     },
-                    body: JSON.stringify({ title: data.workspace.title, description: data.workspace.metas.description, role: data.workspace.metas.role, tone: data.workspace.metas.tone, prompt: data.workspace.metas.prompt, collect_information: data.workspace.metas.collect_information, questionnaire: data.workspace.metas.questionnaire })
+                    body: JSON.stringify({ title: data.workspace.title, stripe_secret_key: data.workspace.metas.stripe_secret_key })
                 });
 
                 if (!response.ok) {
@@ -108,7 +108,7 @@ const Preference: React.FC = () => {
                 const res = await response.json();
 
                 if (res.status === 'success') {
-                    window.location.reload();
+                    //window.location.reload();
                 }
 
                 return 0;
@@ -218,36 +218,11 @@ const Preference: React.FC = () => {
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="icon icon-tabler icons-tabler-outline icon-tabler-square-rounded-plus" style={{position: 'relative', top: '-2px'}}><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z" /><path d="M4 13h3l3 3h4l3 -3h3" /></svg>
                                                 <span className="d-none d-sm-inline">
                                                     &nbsp;
-                                                    Conversations
-                                                </span>
-                                            </Link>
-                                        </OverlayTrigger>
-                                        <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip-top">Upload your project’s common files to the Knowledge Hub to power AI-driven responses and text generation.</Tooltip>} >
-                                            <Link className="btn btn-sm btn-outline-primary me-2" to={'/organization/' + data.workspace.slug + '/knowledge'}>
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="icon icon-tabler icons-tabler-outline icon-tabler-book" style={{position: 'relative', top: '-2px'}}><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0" /><path d="M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0" /><path d="M3 6l0 13" /><path d="M12 6l0 13" /><path d="M21 6l0 13" /></svg>
-                                                <span className="d-none d-sm-inline">
-                                                    &nbsp;
-                                                    Knowledge hub
+                                                    Invoices
                                                 </span>
                                             </Link>
                                         </OverlayTrigger>
                                     </span>
-                                </div>
-                                <div className="row my-3">
-                                    <div className="col-md-12">
-                                        <div className="d-flex justify-content-center gap-3">
-                                            <div id="profilePreview" className="avatar" style={{ width: '100px', height: '100px', objectFit: 'cover', fontSize: '45px', fontWeight: 'bold', backgroundImage: ( data.workspace.metas.logo != undefined ? 'url(' + data.workspace.metas.logo + ')' : 'none' ), backgroundSize: 'cover' }}>{ data.workspace.metas.logo != undefined ? '' : getInitials(data.workspace.title) }</div>
-                                        </div>
-                                        <div className="d-flex justify-content-center mt-3">
-                                            <label className="btn btn-outline-primary btn-sm mb-0" htmlFor="workspace_logo_input">
-                                                Change project logo
-                                            </label>
-                                            <input type="file" accept="image/*" onChange={(e) => { const file = e.target.files?.[0]; if (file) { setData((prevData) => ({ ...prevData, file: file })); }} } className="file-input d-none" id="workspace_logo_input"/>
-                                        </div>
-                                        <div style={{textAlign: 'center'}}>
-                                            <span className="invalid-feedback" style={{ display: data.isSubmitted && !data.isLogoValid ? 'block' : 'none' }}>Upload failed</span>
-                                        </div>
-                                    </div>
                                 </div>
                                 <div className="row my-3">
                                     <div className="col-md-4">
@@ -286,14 +261,14 @@ const Preference: React.FC = () => {
                                 </div>
                                 <div className="row my-3">
                                     <div className="col-md-4">
-                                        <label className="mb-0">Description</label>
+                                        <label className="mb-0">Stripe secret key</label>
                                     </div>
 
                                     <div className="col-md-8">
-                                        <textarea 
+                                        <input 
                                             className="form-control" 
-                                            value={(data.workspace.metas.description != undefined ? data.workspace.metas.description : '')} 
-                                            placeholder="Describe your project" 
+                                            value={(data.workspace.metas.stripe_secret_key != undefined ? data.workspace.metas.stripe_secret_key : '')} 
+                                            placeholder="Stripe secret key" 
                                             maxLength={140}
                                             onChange={(e) => setData((prevData) => ({ 
                                                 ...prevData, 
@@ -301,157 +276,14 @@ const Preference: React.FC = () => {
                                                     ...prevData.workspace, 
                                                     metas: { 
                                                         ...prevData.workspace.metas, 
-                                                        description: e.target.value 
+                                                        stripe_secret_key: e.target.value 
                                                     }
                                                 }
                                             }))}
-                                        ></textarea>
-                                        <div className="d-flex justify-content-end">
-                                            <small className="text-muted">
-                                                {(data.workspace.metas.description?.length || 0)}/140 characters
-                                            </small>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="my-3 border-bottom">
-                                    <h4>Advanced Conversation Settings</h4>
-                                    <p className="text-muted">Fine-tune how your AI assistant interacts with your contacts.</p>
-                                </div>
-
-                                <div className="row my-3">
-                                    <div className="col-md-4">
-                                        <label className="mb-0">AI assistant role</label>
-                                        <p className="text-muted">Select a predefined role for your AI assistant</p>
-                                    </div>
-
-                                    <div className="col-md-8">
-                                        <select 
-                                            className="form-select" 
-                                            value={data.workspace.metas.role || ''}
-                                            onChange={(e) => setData((prevData) => ({ 
-                                                ...prevData, 
-                                                workspace: { 
-                                                    ...prevData.workspace, 
-                                                    metas: { 
-                                                        ...prevData.workspace.metas, 
-                                                        role: e.target.value 
-                                                    }
-                                                }
-                                            }))}
-                                        >
-                                            <option value="">Select a role</option>
-                                            <option value="executive">Executive Assistant</option>
-                                            <option value="recruiter">Recruiter Assistant</option>
-                                            <option value="support">Client Support</option>
-                                            <option value="legal">Legal Advisor</option>
-                                            <option value="sales">Sales Representative</option>
-                                            <option value="technical">Technical Support</option>
-                                            <option value="marketing">Marketing Specialist</option>
-                                        </select>
-                                        
-                                        {/* Show textarea only if custom role is selected */}
-                                        {data.workspace.metas.role === 'custom' && (
-                                            <textarea 
-                                                className="form-control mt-2" 
-                                                value={data.workspace.metas.prompt || ''} 
-                                                placeholder="Write your custom instruction" 
-                                                onChange={(e) => setData((prevData) => ({ 
-                                                    ...prevData, 
-                                                    workspace: { 
-                                                        ...prevData.workspace, 
-                                                        metas: { 
-                                                            ...prevData.workspace.metas, 
-                                                            prompt: e.target.value 
-                                                        }
-                                                    }
-                                                }))}
-                                            />
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="row my-3">
-                                    <div className="col-md-4">
-                                        <label className="mb-0">Workspace tone</label>
-                                        <p className="text-muted">Select how your AI assistant should communicate</p>
-                                    </div>
-
-                                    <div className="col-md-8">
-                                        <select 
-                                            className="form-select" 
-                                            value={data.workspace.metas.tone || ''}
-                                            onChange={(e) => setData((prevData) => ({ 
-                                                ...prevData, 
-                                                workspace: { 
-                                                    ...prevData.workspace, 
-                                                    metas: { 
-                                                        ...prevData.workspace.metas, 
-                                                        tone: e.target.value 
-                                                    }
-                                                }
-                                            }))}
-                                        >
-                                            <option value="">Select a tone</option>
-                                            <option value="formal">Formal</option>
-                                            <option value="friendly">Friendly</option>
-                                            <option value="concise">Concise</option>
-                                            <option value="empathetic">Empathetic</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div className="row my-3">
-                                    <div className="col-md-4">
-                                        <label className="mb-0">Collect Information from Contacts</label>
-                                        <p className="text-muted">Enable the assistant to ask follow-up questions or gather missing details.</p>
-                                    </div>
-
-                                    <div className="col-md-8">
-                                        <div className="form-check">
-                                            <input 
-                                                type="checkbox"
-                                                className="form-check-input"
-                                                id="collectInformation"
-                                                checked={data.workspace.metas.collect_information === 'true'}
-                                                onChange={(e) => handleCollectInformationChange(e.target.checked)}
-                                            />
-                                            <label className="form-check-label" htmlFor="collectInformation">
-                                                Allow the AI assistant to proactively collect information
-                                            </label>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className={`row my-3 ${data.workspace.metas.collect_information === 'true' ? '' : 'd-none'}`}>
-                                    <div className="col-md-4">
-                                        <label className="mb-0">Information to collect</label>
-                                    </div>
-
-                                    <div className="col-md-8">
-                                        <QuestionnaireFields 
-                                            questions={data.workspace.metas.questionnaire || ['']}
-                                            onChange={(newQuestions: any) => setData((prevData) => ({ 
-                                                ...prevData, 
-                                                workspace: { 
-                                                    ...prevData.workspace, 
-                                                    metas: { 
-                                                        ...prevData.workspace.metas, 
-                                                        questionnaire: newQuestions 
-                                                    }
-                                                }
-                                            }))}
-                                            disabled={data.workspace.metas.collect_information !== 'true'}
                                         />
                                     </div>
                                 </div>
-                                <div className="row my-3">
-                                    <div className="col-md-4">
-                                        <label className="mb-0">Additional prompt</label>
-                                        <p className="text-muted">Add a custom instruction to guide the AI assistant's behavior.</p>
-                                    </div>
 
-                                    <div className="col-md-8">
-                                        <textarea className="form-control" value={( data.workspace.metas.prompt != undefined ? data.workspace.metas.prompt : '')} placeholder="Write your custom instruction" onChange={(e) => setData((prevData) => ({ ...prevData, workspace: { ...prevData.workspace, metas: { ...prevData.workspace.metas, prompt: e.target.value }}}))}></textarea>
-                                    </div>
-                                </div>
                                 <div className="row my-3">
                                     <div className="col-md-12" style={{ textAlign: 'right' }}>
                                         <button className="btn btn-primary" onClick={saveWorkspace} disabled={data.isSubmitted && data.isValid}>Save</button>
