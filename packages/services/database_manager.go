@@ -13,7 +13,6 @@ import (
 
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
-	"github.com/oklog/ulid/v2"
 )
 
 type BlockType struct {
@@ -227,7 +226,7 @@ type Block struct {
 
 func (dm *DatabaseManager) AddBlock(userID int64, block map[string]interface{}, slug string) (map[string]interface{}, error) {
 	if slug == "" {
-		slug = NewSlug()
+		slug = NewSlug(15)
 	}
 
 	var existingID int
@@ -285,9 +284,14 @@ func (dm *DatabaseManager) AddBlock(userID int64, block map[string]interface{}, 
 	}, nil
 }
 
-func NewSlug() string {
-	entropy := ulid.Monotonic(rand.New(rand.NewSource(time.Now().UnixNano())), 0)
-	return ulid.MustNew(ulid.Timestamp(time.Now()), entropy).String()
+func NewSlug(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
 }
 
 func (dm *DatabaseManager) GetBlocks(userID int64, blockType string, page int, entriesPerPage int, parent int64) ([]map[string]interface{}, error) {
