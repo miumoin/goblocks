@@ -45,7 +45,7 @@ const getCurrentLocationAndTime = (): Promise<string> => {
     });
 };
 
-const Contact: React.FC = () => {
+const InitInvoice: React.FC = () => {
     const { slug } = useParams<{ slug?: string }>();
     const [data, setData] = useState<dataState>({
         accessKey: '',
@@ -57,17 +57,39 @@ const Contact: React.FC = () => {
     });
 
     useEffect(() => {
-        if( data.profile.slug != '') {
-            window.location.href = App.base + '/chat/' + data.profile.slug;
-        } else {
-            createContact( data.slug );
-        }
+        //if( data.profile.slug != '') {
+            //window.location.href = App.base + '/chat/' + data.profile.slug;
+        //} else {
+            createInvoice( data.slug );
+        //}
     }, [data.profile.slug]);
 
-    const createContact = async ( slug: string|undefined ) : Promise<void> => {
+    const createInvoice = async ( slug: string|undefined ) : Promise<void> => {
+        const params = new URLSearchParams(window.location.search);
+        const email = params.get("email");
+        const shipTo = params.get("ship_to");
+        const billTo = params.get("bill_to");
+
+        const items = [];
+        let i = 1;
+        while (params.has(`item${i}_name`)) {
+            const itemName = params.get(`item${i}_name`);
+            const itemPrice = parseFloat(params.get(`item${i}_price`) || '0');
+            const itemUnits = parseInt(params.get(`item${i}_units`) || '0');
+
+            items.push({
+                name: itemName,
+                price: itemPrice,
+                units: itemUnits,
+            });
+
+            i++;
+        }
+
+        console.log({ shipTo, billTo, items });
         const timestamp = await getCurrentLocationAndTime();
 
-        const response = await fetch(App.api_base + '/chat/' + data.slug + '/contact', {
+        const response = await fetch(App.api_base + '/invoice/' + data.slug + '/init', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -75,7 +97,11 @@ const Contact: React.FC = () => {
                 'X-Vuedoo-Access-Key': data.accessKey
             },
             body: JSON.stringify({
-                title: timestamp
+                title: timestamp,
+                email: email,
+                ship_to: shipTo,
+                bill_to: billTo,
+                items: items,
             })
         });
 
@@ -87,7 +113,8 @@ const Contact: React.FC = () => {
 
         if (res.status === 'success') {
             Cookies.set(`profileSlug_` + slug, res.profile.slug, { expires: 7 });
-            setData((prevData) => ({ ...prevData, workspace: res.workspace, profile: res.profile, isLoaded: true }));
+            // Redirect to payment link
+            //setData((prevData) => ({ ...prevData, workspace: res.workspace, profile: res.profile, isLoaded: true }));
         } else {
             setData((prevData) => ({ ...prevData, isError: true, isLoaded: true }));
         }
@@ -131,4 +158,4 @@ const Contact: React.FC = () => {
     );
 }
 
-export default Contact;
+export default InitInvoice;
