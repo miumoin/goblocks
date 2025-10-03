@@ -94,7 +94,7 @@ const InitInvoice: React.FC = () => {
             headers: {
                 'Content-Type': 'application/json',
                 'X-Vuedoo-Domain': App.domain,
-                'X-Vuedoo-Access-Key': data.accessKey
+                'X-Vuedoo-Access-Key': ""
             },
             body: JSON.stringify({
                 title: timestamp,

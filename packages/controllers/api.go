@@ -37,6 +37,7 @@ func (ac *ApiController) RegisterApiRoutes() {
 		apiGroup.POST("/workspace/delete", ac.DeleteWorkspace)
 		apiGroup.GET("/workspace/:slug", ac.GetWorkspace)
 		apiGroup.POST("/workspace/:slug/update", ac.UpdateWorkspace)
+		apiGroup.POST("/invoice/:slug/init", ac.InitiateInvoice)
 		apiGroup.GET("/workspace/:slug/threads/:page", ac.GetThreads)
 		apiGroup.GET("/welcome", ac.ApiWelcome)
 	}
@@ -332,6 +333,48 @@ func (ac *ApiController) GetThreads(c *gin.Context) {
 		"status":  "success",
 		"threads": []map[string]interface{}{},
 	})
+}
+
+func (ac *ApiController) InitiateInvoice(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+	slug := c.Param("slug")
+	var request struct {
+		Email  string                   `json:"email"`
+		ShipTo string                   `json:"ship_to"`
+		BillTo string                   `json:"bill_to"`
+		Items  []map[string]interface{} `json:"items"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "Invalid request body",
+		})
+		return
+	}
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":     "fail",
+			"workspaces": nil,
+		})
+		return
+	}
+
+	utils := services.NewUtilities(ac.db)
+	paymentLink, pErr := utils.CreateStripeInvoice(ac.db, databaseManager, request.Email)
+	if pErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "fail",
+			"message": pErr.Error(),
+		})
+		return
+	}
+
+	fmt.Println("InitiateInvoice - domain:", domain, " accessKey:", accessKey, " slug:", slug)
+	//fmt.Println("InitiateInvoice - request:", request)
 }
 
 func (ac *ApiController) UpdateWorkspace(c *gin.Context) {
