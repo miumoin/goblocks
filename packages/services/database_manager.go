@@ -197,7 +197,7 @@ func (dm *DatabaseManager) AddMeta(parent string, parentID int64, metaKey string
 	return err
 }
 
-func (dm *DatabaseManager) GetMeta(parent string, parentID int, key string) (string, error) {
+func (dm *DatabaseManager) GetMeta(parent string, parentID int64, key string) (string, error) {
 	var value string
 	err := dm.db.QueryRow(
 		"SELECT meta_value FROM metas WHERE parent = ? AND parent_id = ? AND meta_key = ? AND status = 1",

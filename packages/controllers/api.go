@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -33,6 +34,7 @@ func (ac *ApiController) RegisterApiRoutes() {
 		apiGroup.GET("/workspaces", ac.GetWorkspaces)
 		apiGroup.GET("/workspaces/:page_no", ac.GetWorkspaces)
 		apiGroup.POST("/workspaces/add", ac.AddNewWorkspace)
+		apiGroup.POST("/workspace/delete", ac.DeleteWorkspace)
 		apiGroup.GET("/workspace/:slug", ac.GetWorkspace)
 		apiGroup.POST("/workspace/:slug/update", ac.UpdateWorkspace)
 		apiGroup.GET("/workspace/:slug/threads/:page", ac.GetThreads)
@@ -209,7 +211,7 @@ func (ac *ApiController) AddNewWorkspace(c *gin.Context) {
 	}
 
 	block, err := databaseManager.AddBlock(userID, blockData, "")
-	fmt.Println("AddNewWorkspace - block:", block, " err:", err)
+
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"status": "fail",
@@ -225,6 +227,62 @@ func (ac *ApiController) AddNewWorkspace(c *gin.Context) {
 		"status": "success",
 		"block":  block,
 	})
+}
+
+func (ac *ApiController) DeleteWorkspace(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+
+	var content struct {
+		ID int64 `json:"id"`
+	}
+	if err := c.BindJSON(&content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail"})
+		return
+	}
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+	privileges := string("")
+	privileges, Merr := databaseManager.GetMeta("workspace", content.ID, fmt.Sprintf("privilege_%d", userID))
+	if Merr != nil {
+		//do nothing
+	}
+
+	// Note: deleteBlock implementation needed
+	var deleted bool
+	if privileges != "" {
+		var privArray []string
+		json.Unmarshal([]byte(privileges), &privArray)
+		if contains(privArray, "admin") {
+			err := databaseManager.DeleteBlock(content.ID)
+			if err == nil {
+				deleted = true
+			} else {
+				deleted = false
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": map[bool]string{true: "success", false: "fail"}[deleted],
+	})
+}
+
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
 
 func (ac *ApiController) GetWorkspace(c *gin.Context) {
@@ -378,35 +436,6 @@ func (ac *ApiController) GetWorkspacesByPage(c *gin.Context) {
 		"status":       "success",
 		"workspaces":   workspaces,
 		"subscription": subscription,
-	})
-}
-
-func (ac *ApiController) DeleteWorkspace(c *gin.Context) {
-	domain := c.GetHeader("X-Vuedoo-Domain")
-	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
-
-	var content struct {
-		ID int64 `json:"id"`
-	}
-	if err := c.BindJSON(&content); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "fail"})
-		return
-	}
-
-	userID := getCurrentUser(ac.db, domain, accessKey)
-	privileges := getMeta(ac.db, "workspace", content.ID, fmt.Sprintf("privilege_%d", userID))
-
-	var deleted bool
-	if privileges != nil {
-		var privArray []string
-		json.Unmarshal([]byte(privileges.(string)), &privArray)
-		if contains(privArray, "admin") {
-			deleted = deleteBlock(ac.db, content.ID)
-		}
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"status": map[bool]string{true: "success", false: "fail"}[deleted],
 	})
 }
 
