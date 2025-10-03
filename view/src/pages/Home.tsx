@@ -110,7 +110,6 @@ const Home: React.FC = () => {
 
     function formatDate(date: string): string {
         const utcDate = new Date(date); // Append 'Z' to handle UTC
-        console.log(date);
         
         const day = utcDate.getUTCDate();
         const suffix = (day % 10 === 1 && day !== 11) ? 'st' 
