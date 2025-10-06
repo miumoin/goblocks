@@ -339,12 +339,7 @@ func (ac *ApiController) InitiateInvoice(c *gin.Context) {
 	domain := c.GetHeader("X-Vuedoo-Domain")
 	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
 	slug := c.Param("slug")
-	var request struct {
-		Email  string                   `json:"email"`
-		ShipTo string                   `json:"ship_to"`
-		BillTo string                   `json:"bill_to"`
-		Items  []map[string]interface{} `json:"items"`
-	}
+	var request services.InvoiceRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -364,7 +359,7 @@ func (ac *ApiController) InitiateInvoice(c *gin.Context) {
 	}
 
 	utils := services.NewUtilities(ac.db)
-	paymentLink, pErr := utils.CreateStripeInvoice(ac.db, databaseManager, request.Email)
+	profile, paymentLink, pErr := utils.CreateStripeInvoice(ac.db, domain, slug, *databaseManager, request)
 	if pErr != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"status":  "fail",
@@ -375,6 +370,11 @@ func (ac *ApiController) InitiateInvoice(c *gin.Context) {
 
 	fmt.Println("InitiateInvoice - domain:", domain, " accessKey:", accessKey, " slug:", slug)
 	//fmt.Println("InitiateInvoice - request:", request)
+	c.JSON(http.StatusOK, gin.H{
+		"status":       "success",
+		"payment_link": paymentLink,
+		"profile":      profile,
+	})
 }
 
 func (ac *ApiController) UpdateWorkspace(c *gin.Context) {

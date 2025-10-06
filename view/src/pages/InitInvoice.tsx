@@ -66,9 +66,13 @@ const InitInvoice: React.FC = () => {
 
     const createInvoice = async ( slug: string|undefined ) : Promise<void> => {
         const params = new URLSearchParams(window.location.search);
-        const email = params.get("email");
-        const shipTo = params.get("ship_to");
-        const billTo = params.get("bill_to");
+        const name = params.get("name") || '';
+        const email = params.get("email") || '';
+        const shipAddress = params.get("ship_address") || '';
+        const shipPostcode = params.get("ship_postcode") || '';
+        const shipCity = params.get("ship_city") || '';
+        const shipState = params.get("ship_state") || '';
+        const shipCountry = params.get("ship_country") || '';
 
         const items = [];
         let i = 1;
@@ -86,7 +90,6 @@ const InitInvoice: React.FC = () => {
             i++;
         }
 
-        console.log({ shipTo, billTo, items });
         const timestamp = await getCurrentLocationAndTime();
 
         const response = await fetch(App.api_base + '/invoice/' + data.slug + '/init', {
@@ -98,9 +101,13 @@ const InitInvoice: React.FC = () => {
             },
             body: JSON.stringify({
                 title: timestamp,
+                name: name,
                 email: email,
-                ship_to: shipTo,
-                bill_to: billTo,
+                ship_address: shipAddress,
+                ship_postcode: shipPostcode,
+                ship_city: shipCity,
+                ship_state: shipState,
+                ship_country: shipCountry,
                 items: items,
             })
         });
@@ -113,6 +120,7 @@ const InitInvoice: React.FC = () => {
 
         if (res.status === 'success') {
             Cookies.set(`profileSlug_` + slug, res.profile.slug, { expires: 7 });
+            //window.location.href = res.payment_link;
             // Redirect to payment link
             //setData((prevData) => ({ ...prevData, workspace: res.workspace, profile: res.profile, isLoaded: true }));
         } else {
@@ -141,7 +149,7 @@ const InitInvoice: React.FC = () => {
                         <>
                             { !data.isError ? 
                                 <>
-                                    <p>Preparing a secure chat session for you. One moment...</p>
+                                    <p>Preparing a secure checkout session. One moment...</p>
                                 </>
                                 :
                                 <ErrorText />

@@ -17,6 +17,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/stripe/stripe-go/v79"
+	"github.com/stripe/stripe-go/v79/checkout/session"
+	"github.com/stripe/stripe-go/v79/customer"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -28,6 +32,7 @@ type Request struct {
 // Workspace represents a workspace block
 type Workspace struct {
 	ID        int64             `json:"id"`
+	Author    int64             `json:"author"`
 	Title     string            `json:"title"`
 	Content   string            `json:"content"`
 	Type      string            `json:"type"`
@@ -144,6 +149,120 @@ func GetMD5Hash(text string) string {
 func (u *Utilities) uniqid() string {
 	now := time.Now()
 	return fmt.Sprintf("%010x", now.UnixNano()%0x100000000)
+}
+
+func (u *Utilities) CreateStripeInvoice(db *sql.DB, domain string, slug string, databaseManager DatabaseManager, request InvoiceRequest) (Block, string, error) {
+	// Placeholder implementation
+	var workspace Workspace
+
+	err := db.QueryRow(
+		"SELECT id, author, content FROM blocks WHERE type=? AND slug=? LIMIT 1",
+		"workspace", slug,
+	).Scan(&workspace.ID, &workspace.Author, &workspace.Content)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	invoiceData := map[string]interface{}{
+		"type":    "invoice",
+		"title":   request.Email,
+		"content": "",
+		"parent":  workspace.ID,
+	}
+
+	invoice, _ := databaseManager.AddBlock(workspace.Author, invoiceData, "")
+
+	Stripe_secret_key, mErr := databaseManager.GetMeta("workspace", workspace.ID, "stripe_secret_key")
+	if mErr != nil && Stripe_secret_key == "" {
+		//do nothing
+	}
+
+	Stripe_currency, mErr := databaseManager.GetMeta("workspace", workspace.ID, "stripe_currency")
+	if mErr != nil || Stripe_currency == "" {
+		//do nothing
+		Stripe_currency = "usd"
+	}
+
+	// Add a customer
+
+	stripe.Key = Stripe_secret_key // set your Stripe secret key here
+	//fmt.Println("workspace:", workspace, "Slug:", slug, "Workspace id:", workspace.ID, "Stripe Key:", stripe.Key)
+	fmt.Println(request.Items)
+
+	// Create a checkout session with multiple line items
+	lineItems := []*stripe.CheckoutSessionLineItemParams{}
+
+	for _, item := range request.Items {
+		lineItems = append(lineItems, &stripe.CheckoutSessionLineItemParams{
+			PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
+				Currency: stripe.String(Stripe_currency),
+				ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
+					Name: stripe.String(item.Name),
+				},
+				UnitAmount: stripe.Int64(int64(item.Price * 100)), // amount
+			},
+			Quantity: stripe.Int64(item.Units), // 2 units
+		})
+	}
+
+	// First create or update a customer with billing & shipping
+	custParams := &stripe.CustomerParams{
+		Email: stripe.String(request.Email),
+	}
+	if request.ShipAddress != "" {
+		custParams.Name = stripe.String(request.Name)
+		custParams.Shipping.Address = &stripe.AddressParams{
+			Line1:      stripe.String(request.ShipAddress),
+			PostalCode: stripe.String(request.ShipPostcode),
+			City:       stripe.String(request.ShipCity),
+			State:      stripe.String(request.ShipState),
+			Country:    stripe.String(request.ShipCountry),
+		}
+	}
+	cust, _ := customer.New(custParams)
+	slugValue, ok := invoice["Slug"].(string)
+	if !ok {
+		slugValue = "" // Provide a default value or handle the error as needed
+	}
+
+	params := &stripe.CheckoutSessionParams{
+		Mode:              stripe.String(string(stripe.CheckoutSessionModePayment)),
+		SuccessURL:        stripe.String("https://" + domain + "/" + slug + "/success/?session_id={CHECKOUT_SESSION_ID}"),
+		CancelURL:         stripe.String("https://" + domain + "/" + slug + "/cancelled/?session_id={CHECKOUT_SESSION_ID}"),
+		Customer:          stripe.String(cust.ID),
+		ClientReferenceID: stripe.String(slugValue), // save the invoice ID here
+
+		// Add shipping address collection
+		ShippingAddressCollection: &stripe.CheckoutSessionShippingAddressCollectionParams{
+			AllowedCountries: []*string{
+				stripe.String(request.ShipCountry), // Add more countries as needed
+			},
+		},
+
+		BillingAddressCollection: stripe.String("auto"),
+
+		AutomaticTax: &stripe.CheckoutSessionAutomaticTaxParams{
+			Enabled: stripe.Bool(true),
+		},
+
+		CustomerUpdate: &stripe.CheckoutSessionCustomerUpdateParams{
+			Shipping: stripe.String("auto"), // ✅ save shipping address to Customer
+			Address:  stripe.String("auto"), // ✅ also save billing address (recommended)
+		},
+
+		LineItems: lineItems,
+	}
+
+	s, err := session.New(params)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("Checkout URL:", s.URL)
+
+	// In a real scenario, you would interact with the Stripe API here
+	return Block{}, s.URL, nil
 }
 
 // AddNewProfile inserts a new thread block
