@@ -255,9 +255,6 @@ func (dm *DatabaseManager) AddBlock(userID int64, block map[string]interface{}, 
 		if err != nil {
 			return nil, err
 		}
-
-		rows, _ := res.RowsAffected()
-		fmt.Println("Inserted rows:", rows)
 	} else {
 		return nil, err
 	}
