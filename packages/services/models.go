@@ -1,6 +1,7 @@
 package services
 
 type InvoiceRequest struct {
+	Title        string `json:"title"`
 	Name         string `json:"name"`
 	Email        string `json:"email"`
 	ShipAddress  string `json:"ship_address"`

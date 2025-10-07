@@ -166,7 +166,7 @@ func (u *Utilities) CreateStripeInvoice(db *sql.DB, domain string, slug string, 
 
 	invoiceData := map[string]interface{}{
 		"type":    "invoice",
-		"title":   request.Email,
+		"title":   request.Title,
 		"content": "",
 		"parent":  workspace.ID,
 	}
@@ -206,39 +206,42 @@ func (u *Utilities) CreateStripeInvoice(db *sql.DB, domain string, slug string, 
 		})
 	}
 
+	fmt.Println(request)
+
 	// First create or update a customer with billing & shipping
 	custParams := &stripe.CustomerParams{
 		Email: stripe.String(request.Email),
 	}
+
 	if request.ShipAddress != "" {
-		custParams.Name = stripe.String(request.Name)
-		custParams.Shipping.Address = &stripe.AddressParams{
-			Line1:      stripe.String(request.ShipAddress),
-			PostalCode: stripe.String(request.ShipPostcode),
-			City:       stripe.String(request.ShipCity),
-			State:      stripe.String(request.ShipState),
-			Country:    stripe.String(request.ShipCountry),
+		custParams = &stripe.CustomerParams{
+			Email: stripe.String(request.Email),
+			Shipping: &stripe.CustomerShippingParams{ // ✅ initialize
+				Name: stripe.String(request.Name),
+				Address: &stripe.AddressParams{
+					Line1:      stripe.String(request.ShipAddress),
+					PostalCode: stripe.String(request.ShipPostcode),
+					City:       stripe.String(request.ShipCity),
+					State:      stripe.String(request.ShipState),
+					Country:    stripe.String(request.ShipCountry),
+				},
+			},
 		}
 	}
-	cust, _ := customer.New(custParams)
-	slugValue, ok := invoice["Slug"].(string)
-	if !ok {
-		slugValue = "" // Provide a default value or handle the error as needed
+
+	cust, err := customer.New(custParams)
+	if err != nil {
+		fmt.Println("failed to create customer:", err)
 	}
+
+	fmt.Println("Reference:", invoice["slug"].(string))
 
 	params := &stripe.CheckoutSessionParams{
 		Mode:              stripe.String(string(stripe.CheckoutSessionModePayment)),
 		SuccessURL:        stripe.String("https://" + domain + "/" + slug + "/success/?session_id={CHECKOUT_SESSION_ID}"),
 		CancelURL:         stripe.String("https://" + domain + "/" + slug + "/cancelled/?session_id={CHECKOUT_SESSION_ID}"),
 		Customer:          stripe.String(cust.ID),
-		ClientReferenceID: stripe.String(slugValue), // save the invoice ID here
-
-		// Add shipping address collection
-		ShippingAddressCollection: &stripe.CheckoutSessionShippingAddressCollectionParams{
-			AllowedCountries: []*string{
-				stripe.String(request.ShipCountry), // Add more countries as needed
-			},
-		},
+		ClientReferenceID: stripe.String(invoice["slug"].(string)), // save the invoice ID here
 
 		BillingAddressCollection: stripe.String("auto"),
 
@@ -252,6 +255,14 @@ func (u *Utilities) CreateStripeInvoice(db *sql.DB, domain string, slug string, 
 		},
 
 		LineItems: lineItems,
+	}
+
+	if request.ShipAddress != "" {
+		params.ShippingAddressCollection = &stripe.CheckoutSessionShippingAddressCollectionParams{
+			AllowedCountries: []*string{
+				stripe.String(request.ShipCountry),
+			},
+		}
 	}
 
 	s, err := session.New(params)
