@@ -242,10 +242,7 @@ func (dm *DatabaseManager) AddBlock(userID int64, block map[string]interface{}, 
 			return nil, err
 		}
 	} else if err == sql.ErrNoRows {
-		parentPtr := int64(0)
-		if p, ok := block["parent"].(int); ok {
-			parentPtr = int64(p)
-		}
+		parentPtr := toInt64(block["parent"])
 
 		fmt.Println("Inserting new block:", block)
 
@@ -281,6 +278,22 @@ func (dm *DatabaseManager) AddBlock(userID int64, block map[string]interface{}, 
 		"created_at":  FormatTimeToISO(b.CreatedAt),
 		"modified_at": FormatTimeToISO(b.ModifiedAt),
 	}, nil
+}
+
+func toInt64(v interface{}) int64 {
+	switch val := v.(type) {
+	case int:
+		return int64(val)
+	case int64:
+		return val
+	case float64: // JSON numbers often decode into float64
+		return int64(val)
+	case string:
+		if i, err := strconv.ParseInt(val, 10, 64); err == nil {
+			return i
+		}
+	}
+	return 0 // fallback if nil or unconvertible
 }
 
 func NewSlug(n int) string {
