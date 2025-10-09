@@ -247,6 +247,8 @@ func (dm *DatabaseManager) AddBlock(userID int64, block map[string]interface{}, 
 			parentPtr = int64(p)
 		}
 
+		fmt.Println("Inserting new block:", block)
+
 		_, err := dm.db.Exec(
 			"INSERT INTO blocks (type, title, content, author, slug, parent, created_at, modified_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)",
 			block["type"], block["title"], block["content"], userID, slug, parentPtr,

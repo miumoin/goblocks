@@ -98,7 +98,7 @@ const Preference: React.FC = () => {
                         'X-Vuedoo-Domain': App.domain,
                         'X-Vuedoo-Access-Key': data.accessKey
                     },
-                    body: JSON.stringify({ title: data.workspace.title, stripe_secret_key: data.workspace.metas.stripe_secret_key })
+                    body: JSON.stringify({ title: data.workspace.title, stripe_secret_key: data.workspace.metas.stripe_secret_key, stripe_currency: data.workspace.metas.stripe_currency })
                 });
 
                 if (!response.ok) {
@@ -108,7 +108,7 @@ const Preference: React.FC = () => {
                 const res = await response.json();
 
                 if (res.status === 'success') {
-                    //window.location.reload();
+                    window.location.reload();
                 }
 
                 return 0;
@@ -227,6 +227,7 @@ const Preference: React.FC = () => {
                                 <div className="row my-3">
                                     <div className="col-md-4">
                                         <label className="mb-0">Project name</label>
+                                        <p className="text-muted">Change your project name.</p>
                                     </div>
 
                                     <div className="col-md-8">
@@ -262,6 +263,7 @@ const Preference: React.FC = () => {
                                 <div className="row my-3">
                                     <div className="col-md-4">
                                         <label className="mb-0">Stripe secret key</label>
+                                        <p className="text-muted">Find your stripe secret key.</p>
                                     </div>
 
                                     <div className="col-md-8">
@@ -281,6 +283,47 @@ const Preference: React.FC = () => {
                                                 }
                                             }))}
                                         />
+                                    </div>
+                                </div>
+                                <div className="row my-3">
+                                    <div className="col-md-4">
+                                        <label className="mb-0">Preferred currency</label>
+                                        <p className="text-muted">Select a default currency for invoices.</p>
+                                    </div>
+
+                                    <div className="col-md-8">
+                                        <select 
+                                            className="form-select" 
+                                            value={data.workspace.metas.stripe_currency || ''}
+                                            onChange={(e) => setData((prevData) => ({ 
+                                                ...prevData, 
+                                                workspace: { 
+                                                    ...prevData.workspace, 
+                                                    metas: { 
+                                                        ...prevData.workspace.metas, 
+                                                        stripe_currency: e.target.value 
+                                                    }
+                                                }
+                                            }))}
+                                        >
+                                            <option value="usd">USD</option>
+                                            <option value="eur">EUR</option>
+                                            <option value="gbp">GBP</option>
+                                            <option value="aud">AUD</option>
+                                            <option value="cad">CAD</option>
+                                            <option value="jpy">JPY</option>
+                                            <option value="chf">CHF</option>
+                                            <option value="sek">SEK</option>
+                                            <option value="hkd">HKD</option>
+                                            <option value="nzd">NZD</option>
+                                            <option value="krw">KRW</option>
+                                            <option value="sgd">SGD</option>
+                                            <option value="inr">INR</option>
+                                            <option value="mxn">MXN</option>
+                                            <option value="php">PHP</option>
+                                            <option value="brl">BRL</option>
+                                            <option value="zar">ZAR</option>
+                                        </select>
                                     </div>
                                 </div>
 

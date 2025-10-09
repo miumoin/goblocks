@@ -324,15 +324,48 @@ func (ac *ApiController) GetWorkspace(c *gin.Context) {
 }
 
 func (ac *ApiController) GetThreads(c *gin.Context) {
-	//domain := c.GetHeader("X-Vuedoo-Domain")
-	//accessKey := c.GetHeader("X-Vuedoo-Access-Key")
-	//slug := c.Param("slug")
-	//page := c.Param("page")
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+	slug := c.Param("slug")
+	page := c.Param("page")
 
-	c.JSON(http.StatusOK, gin.H{
-		"status":  "success",
-		"threads": []map[string]interface{}{},
-	})
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":     "fail",
+			"workspaces": nil,
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+
+	if slug != "" {
+		workspace, err := databaseManager.GetBlock(userID, "workspace", 0, slug, 0)
+		//fmt.Println("GetThreads - domain:", domain, " accessKey:", accessKey, " slug:", slug, " page:", page)
+		if workspace != nil && err == nil {
+			threads, err := databaseManager.GetBlocks(userID, "invoice", 1, 20, workspace["id"].(int64))
+			if err != nil || threads == nil {
+				threads = []map[string]interface{}{}
+			}
+
+			//fmt.Println("GetThreads - threads:", threads)
+
+			c.JSON(http.StatusOK, gin.H{
+				"status":    "success",
+				"workspace": workspace,
+				"page":      page,
+				"limit":     20,
+				"threads":   threads,
+			})
+		}
+	} else {
+		c.JSON(http.StatusOK, gin.H{
+			"status":    "fail",
+			"workspace": map[string]interface{}{},
+			"threads":   []map[string]interface{}{},
+		})
+	}
 }
 
 func (ac *ApiController) InitiateInvoice(c *gin.Context) {
@@ -384,6 +417,7 @@ func (ac *ApiController) UpdateWorkspace(c *gin.Context) {
 
 	var request struct {
 		Stripe_secret_key string `json:"stripe_secret_key"`
+		Stripe_currency   string `json:"stripe_currency"`
 	}
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -411,6 +445,7 @@ func (ac *ApiController) UpdateWorkspace(c *gin.Context) {
 		workspace, err := databaseManager.GetBlock(userID, "workspace", 0, slug, 0)
 		if workspace != nil && err == nil {
 			databaseManager.AddMeta("workspace", workspace["id"].(int64), "stripe_secret_key", request.Stripe_secret_key)
+			databaseManager.AddMeta("workspace", workspace["id"].(int64), "stripe_currency", request.Stripe_currency)
 		}
 	}
 
