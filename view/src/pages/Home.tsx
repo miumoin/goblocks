@@ -8,7 +8,7 @@ import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import PageLoader from '../components/PageLoader';
-import {getInitials} from '../components/utils';
+import {getInitials, formatDate} from '../components/utils';
 
 interface dataState {
     accessKey: string;
@@ -108,7 +108,7 @@ const Home: React.FC = () => {
         }
     };
 
-    function formatDate(date: string): string {
+    /*function formatDate(date: string): string {
         const utcDate = new Date(date); // Append 'Z' to handle UTC
         
         const day = utcDate.getUTCDate();
@@ -123,7 +123,7 @@ const Home: React.FC = () => {
           month: 'long',
           year: 'numeric',
         }).replace(/\d+/, `${day}${suffix}`);
-    }
+    }*/
 
     return data.accessKey != '' ? (
         <>

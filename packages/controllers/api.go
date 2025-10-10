@@ -39,6 +39,7 @@ func (ac *ApiController) RegisterApiRoutes() {
 		apiGroup.POST("/workspace/:slug/update", ac.UpdateWorkspace)
 		apiGroup.POST("/invoice/:slug/init", ac.InitiateInvoice)
 		apiGroup.GET("/workspace/:slug/threads/:page", ac.GetThreads)
+		apiGroup.GET("/workspace/:slug/profile/:profileSlug", ac.GetProfile)
 		apiGroup.GET("/welcome", ac.ApiWelcome)
 	}
 }
@@ -454,79 +455,40 @@ func (ac *ApiController) UpdateWorkspace(c *gin.Context) {
 	})
 }
 
-/*
-func (ac *ApiController) AddNewThread(c *gin.Context) {
+func (ac *ApiController) GetProfile(c *gin.Context) {
 	domain := c.GetHeader("X-Vuedoo-Domain")
 	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
 	slug := c.Param("slug")
+	profileSlug := c.Param("profileSlug")
 
-	var saved bool
-	if slug != "" {
-		workspace := getWorkspace(ac.db, slug, domain, accessKey)
-		if workspace != nil {
-			var privileges []string
-			if err := json.Unmarshal([]byte(workspace["meta_value"].(string)), &privileges); err == nil {
-				if contains(privileges, "admin") {
-					saved = addNewProfile(ac.db, workspace, c.Request)
-				}
-			}
-		}
+	fmt.Println("GetProfile - domain:", domain, " accessKey:", accessKey, " slug:", slug, " profileSlug:", profileSlug)
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":     "fail",
+			"workspaces": nil,
+		})
+		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"status": map[bool]string{true: "success", false: "fail"}[saved],
-	})
-}
+	userID := databaseManager.GetCurrentUser()
 
-func (ac *ApiController) DeleteThread(c *gin.Context) {
-	domain := c.GetHeader("X-Vuedoo-Domain")
-	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
-	slug := c.Param("slug")
-
-	var deleted bool
 	if slug != "" {
-		workspace := getWorkspace(ac.db, slug, domain, accessKey)
-		if workspace != nil {
-			var privileges []string
-			if err := json.Unmarshal([]byte(workspace["meta_value"].(string)), &privileges); err == nil {
-				if contains(privileges, "admin") {
-					deleted = deleteProfile(ac.db, workspace, c.Request)
-				}
-			}
+		workspace, _ := databaseManager.GetBlock(userID, "workspace", 0, slug, 0)
+		profile, err := databaseManager.GetBlock(userID, "invoice", 0, profileSlug, 0)
+		if profile != nil && err == nil {
+			c.JSON(http.StatusOK, gin.H{
+				"status":    "success",
+				"profile":   profile,
+				"workspace": workspace,
+			})
 		}
+	} else {
+		c.JSON(http.StatusOK, gin.H{
+			"status":    "fail",
+			"profile":   map[string]interface{}{},
+			"workspace": map[string]interface{}{},
+		})
 	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"status": map[bool]string{true: "success", false: "fail"}[deleted],
-	})
 }
-
-func (ac *ApiController) GetWorkspacesByPage(c *gin.Context) {
-	domain := c.GetHeader("X-Vuedoo-Domain")
-	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
-	page := c.Param("page")
-
-	pageNum, _ := strconv.Atoi(page)
-	workspaces := getWorkspaces(ac.db, domain, accessKey, pageNum)
-	subscription := getSubscriptionInfo(ac.db, domain, accessKey)
-
-	c.JSON(http.StatusOK, gin.H{
-		"status":       "success",
-		"workspaces":   workspaces,
-		"subscription": subscription,
-	})
-}
-
-func (ac *ApiController) GetWorkspaceBySlug(c *gin.Context) {
-	domain := c.GetHeader("X-Vuedoo-Domain")
-	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
-	slug := c.Param("slug")
-
-	workspace := getWorkspaceDetails(ac.db, slug, domain, accessKey)
-
-	c.JSON(http.StatusOK, gin.H{
-		"status":    map[bool]string{true: "success", false: "fail"}[workspace != nil],
-		"workspace": workspace,
-	})
-}
-*/

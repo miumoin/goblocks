@@ -103,8 +103,6 @@ func (u *Utilities) MakeLogin(databaseManager DatabaseManager, c *gin.Context) (
 		}
 	}
 
-	fmt.Println("Register without google: ", userEmail)
-
 	// Otherwise send verification code
 	meta := map[string]interface{}{
 		"timestamp": time.Now().Format(time.RFC3339),
@@ -164,10 +162,12 @@ func (u *Utilities) CreateStripeInvoice(db *sql.DB, domain string, slug string, 
 		fmt.Println(err)
 	}
 
+	invoiceDataBytes, _ := json.Marshal(request)
+
 	invoiceData := map[string]interface{}{
 		"type":    "invoice",
 		"title":   request.Title,
-		"content": "",
+		"content": invoiceDataBytes,
 		"parent":  workspace.ID,
 	}
 
@@ -187,8 +187,6 @@ func (u *Utilities) CreateStripeInvoice(db *sql.DB, domain string, slug string, 
 	// Add a customer
 
 	stripe.Key = Stripe_secret_key // set your Stripe secret key here
-	//fmt.Println("workspace:", workspace, "Slug:", slug, "Workspace id:", workspace.ID, "Stripe Key:", stripe.Key)
-	fmt.Println(request.Items)
 
 	// Create a checkout session with multiple line items
 	lineItems := []*stripe.CheckoutSessionLineItemParams{}
@@ -205,8 +203,6 @@ func (u *Utilities) CreateStripeInvoice(db *sql.DB, domain string, slug string, 
 			Quantity: stripe.Int64(item.Units), // 2 units
 		})
 	}
-
-	fmt.Println(request)
 
 	// First create or update a customer with billing & shipping
 	custParams := &stripe.CustomerParams{
@@ -233,8 +229,6 @@ func (u *Utilities) CreateStripeInvoice(db *sql.DB, domain string, slug string, 
 	if err != nil {
 		fmt.Println("failed to create customer:", err)
 	}
-
-	fmt.Println("Reference:", invoice["slug"].(string))
 
 	params := &stripe.CheckoutSessionParams{
 		Mode:              stripe.String(string(stripe.CheckoutSessionModePayment)),

@@ -19,25 +19,25 @@ export const shortenText = (text: string, maxLength: number = 10): string => {
   return text.length > maxLength ? text.slice(0, maxLength - 3) + "..." : text;
 };
 
-export const formatDate = (json: { date: string; timezone: string }): string => {
-    const utcDate = new Date(json.date + 'Z'); // Append 'Z' to handle UTC
+export function formatDate(date: string): string {
+    const utcDate = new Date(date); // Append 'Z' to handle UTC
     
     const day = utcDate.getUTCDate();
     const suffix = (day % 10 === 1 && day !== 11) ? 'st' 
-                  : (day % 10 === 2 && day !== 12) ? 'nd' 
-                  : (day % 10 === 3 && day !== 13) ? 'rd' 
-                  : 'th';
-  
+                    : (day % 10 === 2 && day !== 12) ? 'nd' 
+                    : (day % 10 === 3 && day !== 13) ? 'rd' 
+                    : 'th';
+    
     return utcDate.toLocaleDateString('en-GB', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
     }).replace(/\d+/, `${day}${suffix}`);
 }
 
-export const shortFormatDate = (json: { date: string; timezone: string }):string => {
-    const utcDate = new Date(json.date + 'Z'); // Append 'Z' to handle UTC
+export const shortFormatDate = (date: string): string => {
+    const utcDate = new Date(date); // Append 'Z' to handle UTC
     const now = new Date();
 
     const hours = utcDate.getUTCHours().toString().padStart(2, '0');

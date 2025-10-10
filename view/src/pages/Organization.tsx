@@ -7,7 +7,7 @@ import Button from 'react-bootstrap/Button';
 import Modal from 'react-bootstrap/Modal';
 import Tooltip from 'react-bootstrap/Tooltip';
 import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
-import {shortenText} from '../components/utils';
+import {shortenText, formatDate} from '../components/utils';
 import PageLoader from '../components/PageLoader';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -212,23 +212,6 @@ const Organization: React.FC = () => {
         }
     };
 
-    function formatDate(json: { date: string; timezone: string }): string {
-        const utcDate = new Date(json.date + 'Z'); // Append 'Z' to handle UTC
-        
-        const day = utcDate.getUTCDate();
-        const suffix = (day % 10 === 1 && day !== 11) ? 'st' 
-                      : (day % 10 === 2 && day !== 12) ? 'nd' 
-                      : (day % 10 === 3 && day !== 13) ? 'rd' 
-                      : 'th';
-      
-        return utcDate.toLocaleDateString('en-GB', {
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric',
-        }).replace(/\d+/, `${day}${suffix}`);
-    }
-
     const copyText = async (id: string, text: string) => {
         try {
             await navigator.clipboard.writeText(text);
@@ -399,12 +382,6 @@ const Organization: React.FC = () => {
                                                                 &nbsp;
                                                                 <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip-top">Permanently delete this conversation.</Tooltip>} >
                                                                     <a href="javascript:void(0)" onClick={() => initDeletion(thread.id, thread.title)}>Delete</a>
-                                                                </OverlayTrigger>
-                                                                &nbsp;
-                                                                -
-                                                                &nbsp;
-                                                                <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip-top">Copy the conversation link to share with the contact person.</Tooltip>} >
-                                                                    <a href="javascript:void(0)" id={'copy_button_' + thread.id} onClick={() => copyText(thread.id, App.base + '/chat/' + thread.slug)}>Copy URL</a>
                                                                 </OverlayTrigger>
                                                                 <span className="d-none d-sm-inline-block">
                                                                     &nbsp;
