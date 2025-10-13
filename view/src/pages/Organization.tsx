@@ -43,7 +43,7 @@ const Organization: React.FC = () => {
     const [data, setData] = useState({
         accessKey: '',
         slug: slug,
-        workspace: { id: '', slug: '', title: '', metas: { collect_information: 'false'} },
+        workspace: { id: '', slug: '', title: '', metas: { stripe_secret_key: ''} },
         threads: [],
         page: 1,
         isLoaded: false,
@@ -329,13 +329,6 @@ const Organization: React.FC = () => {
                                         <div className="d-flex justify-content-between align-items-center border-bottom pb-2 mb-0">
                                             <h6>
                                                 {data.workspace.title}
-                                                { data.workspace.metas?.collect_information === 'true' &&
-                                                    <OverlayTrigger placement="top" overlay={<Tooltip>Download collected information from the chats.</Tooltip>}>
-                                                        <a href="javascript:void(0)" onClick={() => downloadEntries()} className="btn btn-sm btn-link me-0" style={{paddingLeft: '3px'}}>
-                                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"  strokeLinecap="round"  strokeLinejoin="round" className="icon icon-tabler icons-tabler-outline icon-tabler-copy" style={{position: 'relative', 'top': '-2px'}}><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" /><path d="M7 11l5 5l5 -5" /><path d="M12 4l0 12" /></svg>
-                                                        </a>
-                                                    </OverlayTrigger>
-                                                }
                                             </h6>
                                             <span className="btn-toolbar mb-2 mb-md-0 d-inline" style={{whiteSpace: 'nowrap'}}>
                                                 <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip-top">Personalise contact page & fine tune the bot's behavior.</Tooltip>} >
@@ -347,8 +340,17 @@ const Organization: React.FC = () => {
                                                         </span>
                                                     </Link>
                                                 </OverlayTrigger>
-                                                <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip-top">Start a new conversation with a unique URL and custom knowledge tailored for the contact.</Tooltip>} >
-                                                    <button className="btn btn-sm btn-outline-primary me-2" data-toggle="modal" data-target="#knowledge" onClick={() => triggerShare()}>
+                                                <OverlayTrigger
+                                                    placement="top"
+                                                    overlay={
+                                                        <Tooltip id="tooltip-top">
+                                                        {data.workspace.metas.stripe_secret_key && data.workspace.metas.stripe_secret_key !== ''
+                                                            ? 'Generate an invoice link or prompt for AI sales bot.'
+                                                            : 'Please set up Stripe secret key first'}
+                                                        </Tooltip>
+                                                    }
+                                                >
+                                                    <button className={`btn btn-sm btn-outline-primary me-2 ${ !data.workspace.metas.stripe_secret_key || data.workspace.metas.stripe_secret_key === '' ? 'disabled' : '' }`} data-toggle="modal" data-target="#knowledge" onClick={() => triggerShare()}>
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="icon icon-tabler icons-tabler-outline icon-tabler-square-rounded-plus" style={{position: 'relative', top: '-2px'}}><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M6 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M18 6m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M18 18m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M8.7 10.7l6.6 -3.4" /><path d="M8.7 13.3l6.6 3.4" /></svg>
                                                         <span className="d-none d-sm-inline">
                                                             &nbsp;
@@ -429,27 +431,7 @@ const Organization: React.FC = () => {
                         :
                         <PageLoader />
                     }
-                </div>
-
-                <Modal show={show} onHide={closeNewThread}>
-                    <Modal.Header closeButton>
-                        <Modal.Title>New conversation</Modal.Title>
-                    </Modal.Header>
-                    <Modal.Body>
-                        <form onSubmit={addThread}>
-                            <div className="form-group mb-3">
-                                <label className="mb-3">Give this conversation a name</label>
-                                <input type="text" className="form-control" onChange={(e) => setData((prevData) => ({ ...prevData, title: e.target.value }))} />
-                            </div>
-                            <div className="invalid-feedback" style={{ display: data.isSubmitted && !data.isValid ? 'block' : 'none' }}>Invalid intput! Please, input a file or note to save knowledge.</div>
-                        </form>
-                    </Modal.Body>
-                    <Modal.Footer>
-                        <Button variant="primary" onClick={addThread}>
-                            Create
-                        </Button>
-                    </Modal.Footer>
-                </Modal>  
+                </div> 
 
                 <Modal show={data.deletingShow} onHide={closeDeletion}>
                     <Modal.Header>

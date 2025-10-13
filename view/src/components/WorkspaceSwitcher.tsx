@@ -88,7 +88,7 @@ const WorkspaceSwitcher: React.FC = () => {
                 >
                     <a
                         href={`${data.stripe_payment_link}?client_reference_id=${data.subscription.user_id}`}
-                        className="btn btn-danger btn-sm me-2"
+                        className="btn btn-danger btn-sm me-2 d-none"
                         target="_blank"
                         rel="noopener noreferrer"
                     >

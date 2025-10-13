@@ -240,8 +240,8 @@ const Home: React.FC = () => {
             <Header />
             <div className="cover-container d-flex h-100 p-3 mx-auto flex-column" style={{minHeight: '70vh', maxWidth: '44em', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', textAlign: 'center'}}>
                 <main role="main" className="inner cover">
-                    <h1 className="cover-heading">Feedback, Made Human.</h1>
-                    <p className="lead">An intelligent feedback tool that listens, asks follow-up questions, identifies key information, and explains to help customers better understand your service or product.</p>
+                    <h1 className="cover-heading">Chat. Sell. Get Paid.</h1>
+                    <p className="lead">A smart tool that instantly creates invoices during conversations - so your chatbot can sell and accept payments on the fly.</p>
                     <p className="lead mt-3">
                         <a href={App.base + '/login'} className="btn btn-lg btn-primary">Get started</a>
                     </p>
@@ -297,23 +297,25 @@ const Home: React.FC = () => {
                                     Hi,
                                 </p>
 
-                                <p>In the real world, when a customer has something to say, they talk to you. Like a human.</p>
+                                <p>In real business, sales don’t always start on a website or end in a checkout cart.</p>
     
-                                <p>They don't just click stars or fill out rigid forms. They speak. They vent. They ask. And sometimes, they don’t even know exactly what they want — they’re looking for clarity, not just a survey.</p>
+                                <p>They start with a conversation — someone asking a question, exploring options, or simply saying, “Can you send me the price?”</p>
 
-                                <p className="highlight" style={{ fontSize: '1.3rem', fontWeight: 500, textDecoration: 'underline' }}>They want to have a conversation — not fill in boxes.</p>
+                                <p>But most sales tools aren’t built for that. They expect forms, product pages, and manual steps.</p>
+
+                                <p>They don’t understand that your customer might already be talking to your chatbot — or even your AI assistant — ready to buy right there in the chat.</p>
                                 
-                                <p>But most digital feedback systems don’t allow that. You send a form, they tick a few options, and maybe drop a quick comment. That’s it. Then they leave, often unheard.</p>
-
-                                <p>Even if you're great at solving problems, the tools don't give you the chance to ask the right questions or explain your service properly. There's no real connection, no chance to adapt in real time.</p>
-
-                                <p className="highlight" style={{ fontSize: '1.3rem', fontWeight: 500, textDecoration: 'underline' }}>Now, with AI and large language models, that changes.</p>
+                                <p className="highlight" style={{ fontSize: '1.3rem', fontWeight: 500, textDecoration: 'underline' }}>That’s why we built a smarter way to sell.</p>
                                 
-                                <p>We're building a new kind of feedback tool — one that listens like a human, asks intelligent follow-ups, explains your product or service clearly, and turns feedback into a two-way conversation.</p>
-                                
-                                <p>It helps users feel heard, understood, and informed — so they don't leave out of frustration or confusion.</p>
+                                <p>With Chat. Sell. Get Paid., your chatbot can instantly create an invoice while chatting — dynamically, on the fly — and process payments right there.</p>
 
-                                <p className="highlight" style={{ fontSize: '1.3rem', fontWeight: 500, textDecoration: 'underline' }}>This isn't just smarter feedback. It's human-centered communication — powered by AI.</p>
+                                <p className="highlight" style={{ fontSize: '1.3rem', fontWeight: 500, textDecoration: 'underline' }}>No switching tabs. No lost leads. No waiting for follow-up emails.</p>
+
+                                <p>Whether you’re using CustomGPT, Typewriting AI, or any other shareable chatbot platform, this tool fits right in — letting your conversations become sales, not just chats.</p>
+
+                                <p className="highlight" style={{ fontSize: '1.3rem', fontWeight: 500, textDecoration: 'underline' }}>It’s not just automation.</p>
+
+                                <p className="highlight" style={{ fontSize: '1.3rem', fontWeight: 500, textDecoration: 'underline' }}>It’s real-time commerce — powered by AI.</p>
 
                                 <p className="signature" style={{ fontSize: '1.25rem', marginTop: '2rem' }}>– The Team at Typewriting AI</p>
                             </div>
@@ -347,9 +349,9 @@ const Home: React.FC = () => {
                                                 <path d="m2.165 15.803.02-.004c1.83-.363 2.948-.842 3.468-1.105A9.06 9.06 0 0 0 8 15c4.418 0 8-3.134 8-7s-3.582-7-8-7-8 3.134-8 7c0 1.76.743 3.37 1.97 4.6a10.437 10.437 0 0 1-.524 2.318l-.003.011a10.722 10.722 0 0 1-.244.637c-.079.186.074.394.273.362a21.673 21.673 0 0 0 .693-.125zm.8-3.108a1 1 0 0 0-.287-.801C1.618 10.83 1 9.468 1 8c0-3.192 3.004-6 7-6s7 2.808 7 6c0 3.193-3.004 6-7 6a8.06 8.06 0 0 1-2.088-.272 1 1 0 0 0-.711.074c-.387.196-1.24.57-2.634.893a10.97 10.97 0 0 0 .398-2z"/>
                                             </svg>
                                         </div>
-                                        <h4 className="mb-0">Natural Conversations</h4>
+                                        <h4 className="mb-0">Sales Happen in Conversation</h4>
                                     </div>
-                                    <p className="mb-0">Users can express thoughts freely in a flowing conversation, ensuring all relevant topics are naturally explored — without limiting them to predefined questions.</p>
+                                    <p className="mb-0">Customers already ask questions, negotiate, and decide inside chat windows. Instead of pushing them to a separate checkout page, this tool lets you close the deal right inside the chat — no friction, no drop-offs.</p>
                                 </div>
                             </div>
 
@@ -361,9 +363,9 @@ const Home: React.FC = () => {
                                                 <path fillRule="evenodd" d="M5.828 10.172a.5.5 0 0 0-.707 0l-4.096 4.096V11.5a.5.5 0 0 0-1 0v3.975a.5.5 0 0 0 .5.5H4.5a.5.5 0 0 0 0-1H1.732l4.096-4.096a.5.5 0 0 0 0-.707zm4.344-4.344a.5.5 0 0 0 .707 0l4.096-4.096V4.5a.5.5 0 1 0 1 0V.525a.5.5 0 0 0-.5-.5H11.5a.5.5 0 0 0 0 1h2.768l-4.096 4.096a.5.5 0 0 0 0 .707z"/>
                                             </svg>
                                         </div>
-                                        <h4 className="mb-0">Adaptive System</h4>
+                                        <h4 className="mb-0">On-the-Fly Invoicing</h4>
                                     </div>
-                                    <p className="mb-0">Whether someone wants to say it all at once or prefers guided prompts, our system adapts to both — ensuring you always get the full story.</p>
+                                    <p className="mb-0">Unlike static eCommerce listings, your chatbot can generate a custom invoice instantly, based on what the customer needs. Perfect for personalized offers, service-based pricing, or quick deals without setup.</p>
                                 </div>
                             </div>
 
@@ -376,9 +378,9 @@ const Home: React.FC = () => {
                                                 <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8z"/>
                                             </svg>
                                         </div>
-                                        <h4 className="mb-0">Real-time Insights</h4>
+                                        <h4 className="mb-0">Built for Chatbots</h4>
                                     </div>
-                                    <p className="mb-0">Responses are saved in real time. If a user leaves halfway through, you still retain valuable insights — without relying on full submission.</p>
+                                    <p className="mb-0">Where traditional checkout systems depend on complex storefronts, this tool plugs directly into CustomGPT, Typewriting AI, or any AI chatbot — turning conversations into transactions automatically.</p>
                                 </div>
                             </div>
 
@@ -390,16 +392,16 @@ const Home: React.FC = () => {
                                                 <path d="M2 6a6 6 0 1 1 10.174 4.31c-.203.196-.359.4-.453.619l-.762 1.769A.5.5 0 0 1 10.5 13a.5.5 0 0 1 0 1 .5.5 0 0 1 0 1l-.224.447a1 1 0 0 1-.894.553H6.618a1 1 0 0 1-.894-.553L5.5 15a.5.5 0 0 1 0-1 .5.5 0 0 1 0-1 .5.5 0 0 1-.46-.302l-.761-1.77a1.964 1.964 0 0 0-.453-.618A5.984 5.984 0 0 1 2 6zm6-5a5 5 0 0 0-3.479 8.592c.263.254.514.564.676.941L5.83 12h4.342l.632-1.467c.162-.377.413-.687.676-.941A5 5 0 0 0 8 1z"/>
                                             </svg>
                                         </div>
-                                        <h4 className="mb-0">Smart Assistant</h4>
+                                        <h4 className="mb-0">Instant Payment</h4>
                                     </div>
-                                    <p className="mb-0">Our AI assistant answers questions in real time from your knowledge base, offering clarity and supporting retention — even during feedback.</p>
+                                    <p className="mb-0">No waiting for manual payment links or follow-up messages. Customers can pay directly in the chat, get an instant confirmation, and you get paid faster — all within a seamless, human-like experience.</p>
                                 </div>
                             </div>
                         </div>
 
                         <div className="text-center mt-5">
                             <a href={App.base + '/login'} className="btn btn-primary btn-lg px-4">
-                                Start Listening Smarter
+                                Start Selling Smarter
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-arrow-right ms-2" viewBox="0 0 16 16">
                                     <path fillRule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/>
                                 </svg>
@@ -440,13 +442,13 @@ const Home: React.FC = () => {
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-check-circle-fill text-success me-2" viewBox="0 0 16 16">
                                                     <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
                                                 </svg>
-                                                Unlimited Knowledge Bases
+                                                Compatible with any Chatbot
                                             </li>
                                             <li>
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-info-circle-fill text-info me-2" viewBox="0 0 16 16">
                                                     <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/>
                                                 </svg>
-                                                Upto 30 contacts
+                                                Upto 30 invoices
                                             </li>
                                         </ul>
                                         <a href={App.base + '/login'} className="btn btn-primary btn-lg">
@@ -480,13 +482,13 @@ const Home: React.FC = () => {
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-check-circle-fill text-success me-2" viewBox="0 0 16 16">
                                                     <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
                                                 </svg>
-                                                Unlimited Knowledge Bases
+                                                Compatible with any Chatbot
                                             </li>
                                             <li>
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-info-circle-fill text-info me-2" viewBox="0 0 16 16">
                                                     <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/>
                                                 </svg>
-                                                Unlimited contacts
+                                                Unlimited invoices
                                             </li>
                                         </ul>
                                         <a href={App.base + '/login'} className="btn btn-primary btn-lg">
