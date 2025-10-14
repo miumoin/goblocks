@@ -2,6 +2,7 @@
 .env.dev
 .env.prod
 view/node_modules/*
+view/dist
 view/package-lock.json
 view/package.json
 shopify.app*.toml

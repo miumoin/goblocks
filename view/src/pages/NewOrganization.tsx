@@ -89,10 +89,10 @@ const NewOrganization: React.FC = () => {
                                     <input type="text" className="form-control" placeholder="i.e. Acme Corporation" onChange={(e) => setData((prevData) => ({ ...prevData, newWorkspaceTitle: e.target.value }))} required />
                                     <div className="invalid-feedback" style={{ display: data.isSubmitted && !data.isValid ? 'block' : 'none' }}>Invalid name.</div>
                                 </div>
-                                <div className="d-flex justify-content-between align-items-center border-bottom pb-2 mb-0">
+                                <div className="d-flex justify-content-between align-items-center border-bottom pb-2 mb-0 d-none">
                                     <h6>Information you are collecting (optional)</h6>
                                 </div>
-                                <div className={`mb-3 mt-3`}>
+                                <div className={`mb-3 mt-3 d-none`}>
                                     <div className="mb-3 mt-3">
                                         <QuestionnaireFields 
                                             questions={data.newWorkspaceMetas.questionnaire || ['']}
