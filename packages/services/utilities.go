@@ -62,6 +62,8 @@ func NewUtilities(db *sql.DB) *Utilities {
 func (u *Utilities) MakeLogin(databaseManager DatabaseManager, c *gin.Context) (int64, string, string, error) {
 	req := &Request{c.Request}
 
+	fmt.Println("MakeLogin called")
+
 	// Parse JSON
 	body, err := req.GetContent()
 	if err != nil {

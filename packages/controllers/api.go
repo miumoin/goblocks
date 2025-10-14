@@ -38,6 +38,7 @@ func (ac *ApiController) RegisterApiRoutes() {
 		apiGroup.GET("/workspace/:slug", ac.GetWorkspace)
 		apiGroup.POST("/workspace/:slug/update", ac.UpdateWorkspace)
 		apiGroup.POST("/invoice/:slug/init", ac.InitiateInvoice)
+		apiGroup.POST("/workspace/:slug/thread/delete", ac.DeleteThread)
 		apiGroup.GET("/workspace/:slug/threads/:page", ac.GetThreads)
 		apiGroup.GET("/workspace/:slug/profile/:profileSlug", ac.GetProfile)
 		apiGroup.GET("/welcome", ac.ApiWelcome)
@@ -55,6 +56,8 @@ func (ac *ApiController) ApiWelcome(c *gin.Context) {
 func (ac *ApiController) Login(c *gin.Context) {
 	domain := c.GetHeader("X-Vuedoo-Domain")
 	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+
+	fmt.Println("Login - domain:", domain, " accessKey:", accessKey)
 
 	databaseManager, err := services.NewDatabaseManager(ac.db, domain, accessKey)
 	if err != nil {
@@ -417,6 +420,7 @@ func (ac *ApiController) UpdateWorkspace(c *gin.Context) {
 	slug := c.Param("slug")
 
 	var request struct {
+		Title             string `json:"title"`
 		Stripe_secret_key string `json:"stripe_secret_key"`
 		Stripe_currency   string `json:"stripe_currency"`
 	}
@@ -428,8 +432,6 @@ func (ac *ApiController) UpdateWorkspace(c *gin.Context) {
 		})
 		return
 	}
-
-	fmt.Println("UpdateWorkspace - request:", request)
 
 	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
 	if dErr != nil {
@@ -445,6 +447,14 @@ func (ac *ApiController) UpdateWorkspace(c *gin.Context) {
 	if slug != "" {
 		workspace, err := databaseManager.GetBlock(userID, "workspace", 0, slug, 0)
 		if workspace != nil && err == nil {
+			databaseManager.AddBlock(workspace["author"].(int64), map[string]interface{}{
+				"id":      workspace["id"].(int64),
+				"type":    "workspace",
+				"title":   request.Title,
+				"content": workspace["content"].(string),
+				"parent":  workspace["parent"].(int64),
+			}, workspace["slug"].(string))
+
 			databaseManager.AddMeta("workspace", workspace["id"].(int64), "stripe_secret_key", request.Stripe_secret_key)
 			databaseManager.AddMeta("workspace", workspace["id"].(int64), "stripe_currency", request.Stripe_currency)
 		}
@@ -452,6 +462,56 @@ func (ac *ApiController) UpdateWorkspace(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
+	})
+}
+
+func (ac *ApiController) DeleteThread(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+	slug := c.Param("slug")
+
+	var content struct {
+		ID int64 `json:"id"`
+	}
+	if err := c.BindJSON(&content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail"})
+		return
+	}
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+	workspace, _ := databaseManager.GetBlock(userID, "workspace", 0, slug, 0)
+
+	privileges := string("")
+	privileges, Merr := databaseManager.GetMeta("workspace", workspace["id"].(int64), fmt.Sprintf("privilege_%d", userID))
+	if Merr != nil {
+		//do nothing
+	}
+
+	// Note: deleteBlock implementation needed
+	var deleted bool
+	if privileges != "" {
+		var privArray []string
+		json.Unmarshal([]byte(privileges), &privArray)
+		if contains(privArray, "admin") {
+			err := databaseManager.DeleteBlock(content.ID)
+			if err == nil {
+				deleted = true
+			} else {
+				deleted = false
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": map[bool]string{true: "success", false: "fail"}[deleted],
 	})
 }
 
