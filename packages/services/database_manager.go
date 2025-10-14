@@ -22,7 +22,7 @@ type BlockType struct {
 	Content    string
 	Author     int64
 	Slug       string
-	Parent     *int64
+	Parent     int64
 	CreatedAt  string
 	ModifiedAt string
 	Status     int
@@ -122,7 +122,7 @@ func (dm *DatabaseManager) AddUser(email, password string) (int64, error) {
 	var id int64
 	err := dm.db.QueryRow("SELECT id FROM users WHERE email = ?", email).Scan(&id)
 	if err != nil {
-		return 0, err
+		//do nothing
 	}
 
 	if id > 0 {
