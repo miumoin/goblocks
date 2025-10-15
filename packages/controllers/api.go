@@ -38,6 +38,7 @@ func (ac *ApiController) RegisterApiRoutes() {
 		apiGroup.GET("/workspace/:slug", ac.GetWorkspace)
 		apiGroup.POST("/workspace/:slug/update", ac.UpdateWorkspace)
 		apiGroup.POST("/invoice/:slug/init", ac.InitiateInvoice)
+		apiGroup.POST("/invoice/:slug/update", ac.UpdateInvoice)
 		apiGroup.POST("/workspace/:slug/thread/delete", ac.DeleteThread)
 		apiGroup.GET("/workspace/:slug/threads/:page", ac.GetThreads)
 		apiGroup.GET("/workspace/:slug/profile/:profileSlug", ac.GetProfile)
@@ -411,6 +412,42 @@ func (ac *ApiController) InitiateInvoice(c *gin.Context) {
 		"status":       "success",
 		"payment_link": paymentLink,
 		"profile":      profile,
+	})
+}
+
+func (ac *ApiController) UpdateInvoice(c *gin.Context) {
+	/*domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+	slug := c.Param("slug")
+
+	var request struct {
+		SessionId string `json:"session_id"`
+		Status    string `json:"status"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "Invalid request body",
+		})
+		return
+	}
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":     "fail",
+			"workspaces": nil,
+		})
+		return
+	}*/
+
+	//utils := services.NewUtilities(ac.db)
+	//utils.UpdateInvoice(ac.db, domain, slug, *databaseManager, request)
+
+	//fmt.Println("InitiateInvoice - request:", request)
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
 	})
 }
 

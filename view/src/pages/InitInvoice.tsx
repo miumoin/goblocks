@@ -120,7 +120,7 @@ const InitInvoice: React.FC = () => {
 
         if (res.status === 'success') {
             Cookies.set(`profileSlug_` + slug, res.profile.slug, { expires: 7 });
-            //window.location.href = res.payment_link;
+            window.location.href = res.payment_link;
         } else {
             setData((prevData) => ({ ...prevData, isError: true, isLoaded: true }));
         }

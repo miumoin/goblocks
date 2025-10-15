@@ -6,6 +6,7 @@ import { GoogleOAuthProvider } from "@react-oauth/google";
 import Home from './pages/Home';
 import Chat from './pages/Chat';
 import InitInvoice from './pages/InitInvoice';
+import InvoiceSuccess from './pages/InvoiceSuccess';
 import Login from './pages/Login';
 import Verify from './pages/Verify';
 import Profile from './pages/Profile';
@@ -27,6 +28,7 @@ const App: React.FC = () => {
                     <Route path="/organization/:slug/preference" element={<Preference />} />
                     <Route path="/organization/:slug/profile/:profileSlug" element={<Profile />} />
                     <Route path="/:slug" element={<InitInvoice />} />
+                    <Route path="/:slug/success" element={<InvoiceSuccess />} />
                     <Route path="/chat/:slug" element={<Chat />} />
                     <Route path="*" element={<NotFound />} />
                 </Routes>

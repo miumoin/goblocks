@@ -234,8 +234,8 @@ func (u *Utilities) CreateStripeInvoice(db *sql.DB, domain string, slug string, 
 
 	params := &stripe.CheckoutSessionParams{
 		Mode:              stripe.String(string(stripe.CheckoutSessionModePayment)),
-		SuccessURL:        stripe.String("https://" + domain + "/" + slug + "/success/?session_id={CHECKOUT_SESSION_ID}"),
-		CancelURL:         stripe.String("https://" + domain + "/" + slug + "/cancelled/?session_id={CHECKOUT_SESSION_ID}"),
+		SuccessURL:        stripe.String("https://" + domain + "/" + slug + "/success/?status=true&session_id={CHECKOUT_SESSION_ID}"),
+		CancelURL:         stripe.String("https://" + domain + "/" + slug + "/success/?status=false&session_id={CHECKOUT_SESSION_ID}"),
 		Customer:          stripe.String(cust.ID),
 		ClientReferenceID: stripe.String(invoice["slug"].(string)), // save the invoice ID here
 
