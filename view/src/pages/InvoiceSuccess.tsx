@@ -31,6 +31,7 @@ const InvoiceSuccess: React.FC = () => {
     const updateInvoice = async ( slug: string|undefined ) : Promise<void> => {
         const params = new URLSearchParams(window.location.search);
         const session_id = params.get("session_id") || '';
+        const status = params.get("status") || 'false';
 
         const response = await fetch(App.api_base + '/invoice/' + data.slug + '/update', {
             method: 'POST',
@@ -40,7 +41,8 @@ const InvoiceSuccess: React.FC = () => {
                 'X-Vuedoo-Access-Key': ""
             },
             body: JSON.stringify({
-                session_id: session_id
+                session_id: session_id,
+                status: status
             })
         });
 
@@ -51,38 +53,26 @@ const InvoiceSuccess: React.FC = () => {
         const res = await response.json();
 
         if (res.status === 'success') {
-            Cookies.set(`profileSlug_` + slug, res.profile.slug, { expires: 7 });
-            window.location.href = res.payment_link;
-        } else {
-            setData((prevData) => ({ ...prevData, isError: true, isLoaded: true }));
+            setData((prevData) => ({ ...prevData, isError: ( status == 'true' ? false : true ), isLoaded: true }));
         }
     };
 
     return (
         <>
-            { data.isLoaded && !data.isError ? 
-                <header className="container mt-4 border-bottom">
-                    <div className="d-flex justify-content-center gap-3">
-                        <h1 className="h4">Success!</h1>
-                    </div>
-                    <div className="d-flex justify-content-center gap-3 mt-3">
-                        <p className="font-weight-bold"></p>
-                    </div>
-                </header>
-                :
-                <Header />
-            }
+            <Header />
 
             <main>
-                <div className="container my-3 p-1 p-md-3 bg-body shadow-sm">
+                <div className="d-flex justify-content-center align-items-center" style={{ minHeight: "50vh" }}>
                     { data.isLoaded ? 
                         <>
                             { !data.isError ? 
                                 <>
-                                    <p>Preparing a secure checkout session. One moment...</p>
+                                    <p>Payment has been successful ✅</p>
                                 </>
                                 :
-                                <ErrorText />
+                                <>
+                                    <p>Payment has been failed ❌</p>
+                                </>
                             }
                         </>
                         :

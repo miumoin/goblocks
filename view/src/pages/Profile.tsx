@@ -102,18 +102,15 @@ const Profile: React.FC = () => {
                     { data.isLoaded ? 
                         <>
                             <div className="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-start pt-3 pb-2 mb-3 border-bottom">
-                                <h3 className="h2">{data.profile.title}</h3>
-                                <div className="btn-toolbar mb-2 mb-md-0 d-inline" style={{whiteSpace: 'nowrap'}}>
-                                    <OverlayTrigger placement="top" overlay={<Tooltip>Copy the link and share to generate a similar invoice.</Tooltip>} >
-                                        <a href="javascript:void(0)" onClick={() => copyText( App.base + '/chat/' + data.profileSlug )} style={{ pointerEvents: ( copySuccess ? "none" : "auto" ), color: ( copySuccess ? "gray" : "" )}} className="btn btn-sm btn-outline-primary">
-                                            { !copySuccess ?
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"  strokeLinecap="round"  strokeLinejoin="round" className="icon icon-tabler icons-tabler-outline icon-tabler-copy"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M7 7m0 2.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667z" /><path d="M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1" /></svg>
-                                                :
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"  strokeLinecap="round"  strokeLinejoin="round" className="icon icon-tabler icons-tabler-outline icon-tabler-copy"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9.615 20h-2.615a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8" /><path d="M14 19l2 2l4 -4" /><path d="M9 8h4" /><path d="M9 12h2" /></svg>
-                                            }
-                                        </a>
-                                    </OverlayTrigger>
-                                </div>
+                                <h3 className="h2">
+                                    {data.profile.title}
+                                    &nbsp;
+                                    {data.profile.content && data.profile.content['status'] && data.profile.content['status'] == 'true' ? 
+                                        <span className="badge bg-success">Completed</span>
+                                        : 
+                                        <span className="badge bg-warning">Draft</span> 
+                                    }
+                                </h3>
                             </div>
 
                             <div className="my-3 p-md-3 bg-body rounded shadow-sm">

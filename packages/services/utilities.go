@@ -234,8 +234,8 @@ func (u *Utilities) CreateStripeInvoice(db *sql.DB, domain string, slug string, 
 
 	params := &stripe.CheckoutSessionParams{
 		Mode:              stripe.String(string(stripe.CheckoutSessionModePayment)),
-		SuccessURL:        stripe.String("https://" + domain + "/" + slug + "/success/?status=true&session_id={CHECKOUT_SESSION_ID}"),
-		CancelURL:         stripe.String("https://" + domain + "/" + slug + "/success/?status=false&session_id={CHECKOUT_SESSION_ID}"),
+		SuccessURL:        stripe.String("https://" + domain + "/" + invoice["slug"].(string) + "/success/?status=true&session_id={CHECKOUT_SESSION_ID}"),
+		CancelURL:         stripe.String("https://" + domain + "/" + invoice["slug"].(string) + "/success/?status=false&session_id={CHECKOUT_SESSION_ID}"),
 		Customer:          stripe.String(cust.ID),
 		ClientReferenceID: stripe.String(invoice["slug"].(string)), // save the invoice ID here
 
@@ -270,6 +270,43 @@ func (u *Utilities) CreateStripeInvoice(db *sql.DB, domain string, slug string, 
 
 	// In a real scenario, you would interact with the Stripe API here
 	return Block{}, s.URL, nil
+}
+
+func (u *Utilities) UpdateInvoice(db *sql.DB, domain string, slug string, databaseManager DatabaseManager, request map[string]interface{}) error {
+	// Placeholder implementation
+	var profile BlockType
+
+	err := db.QueryRow(
+		"SELECT id, title, content, author, parent FROM blocks WHERE type=? AND slug=? LIMIT 1",
+		"invoice", slug,
+	).Scan(&profile.ID, &profile.Title, &profile.Content, &profile.Author, &profile.Parent)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(profile.Content), &data); err != nil {
+		panic(err)
+	}
+
+	data["status"] = request["status"]
+	data["session_id"] = request["session_id"]
+
+	invoiceDataBytes, _ := json.Marshal(data)
+
+	invoiceData := map[string]interface{}{
+		"type":    "invoice",
+		"title":   profile.Title,
+		"content": invoiceDataBytes,
+		"parent":  profile.Parent,
+	}
+
+	block, err := databaseManager.AddBlock(profile.Author, invoiceData, slug)
+	fmt.Println("Updated block:", block, err)
+
+	// In a real scenario, you would interact with the Stripe API here
+	return nil
 }
 
 // AddNewProfile inserts a new thread block

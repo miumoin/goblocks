@@ -374,6 +374,12 @@ const Organization: React.FC = () => {
                                                         <p className="pt-1 pb-1 mb-0 small lh-sm">
                                                             <strong className="d-block text-gray-dark">
                                                                 <a className="text-decoration-none" href={ App.base + '/organization/' + data.workspace.slug + '/profile/' + thread.slug }>{thread.title}</a>
+                                                                &nbsp;
+                                                                {thread.content && JSON.parse(thread.content)['status'] && JSON.parse(thread.content)['status'] == 'true' ? 
+                                                                    <span className="badge bg-success">Completed</span>
+                                                                    : 
+                                                                    <span className="badge bg-warning">Draft</span> 
+                                                                }
                                                             </strong>
                                                             <small>
                                                                 <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip-top">Manage conversation-specific knowledge base and send direct messages.</Tooltip>} >
