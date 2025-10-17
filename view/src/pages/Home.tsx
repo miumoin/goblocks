@@ -264,8 +264,8 @@ const Home: React.FC = () => {
                                 boxShadow: '0 0 20px rgba(255,255,255,0.2)'
                             }}>
                                 <iframe
-                                    src="https://www.youtube.com/embed/8LBxvMnRkNA?si=cPodDgBanYw0QmUL"
-                                    title="Typewriting AI Demo"
+                                    src="https://www.youtube.com/embed/MP0irQrJnaA?si=yhqytsBS5bEowGNm"
+                                    title="Typewriting AI Payment Processing Demo"
                                     allowFullScreen
                                     frameBorder="0"
                                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
