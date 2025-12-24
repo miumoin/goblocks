@@ -12,6 +12,7 @@ import PageLoader from '../components/PageLoader';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import OrganizationShare, { OpenShareWindowHandle } from '../components/OrganizationShare';
+import OrganizationNode, { OpenNodeWindowHandle } from '../components/OrganizationNode';
 
 interface threadState {
     id: string; 
@@ -104,6 +105,7 @@ const Organization: React.FC = () => {
         const res = await response.json();
 
         if (res.status === 'success') {
+            console.log(res.workspace);
             setData((prevData) => ({ ...prevData, workspace: res.workspace, isLoaded: true }));
         }
     };
@@ -127,9 +129,9 @@ const Organization: React.FC = () => {
         const res = await response.json();
 
         if (res.status === 'success') {
-            if( threadsRef.current != res.threads ) {
+            //if( threadsRef.current != res.threads ) {
                 setData((prevData) => ({ ...prevData, threads: res.threads, isLoaded: true }));
-            }        
+            //}        
         }
     };
 
@@ -324,6 +326,10 @@ const Organization: React.FC = () => {
     const triggerShare = () => {
         shareWindowref.current?.enableShare();
     };
+    const nodeWindowref = useRef<OpenNodeWindowHandle>(null);
+    const triggerNode = () => {
+        nodeWindowref.current?.enableNode();
+    };
     
     return (
         <>
@@ -364,12 +370,21 @@ const Organization: React.FC = () => {
                                                         </span>
                                                     </Link>
                                                 </OverlayTrigger>
-                                                <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip-top">Start a new conversation with a unique URL and custom knowledge tailored for the contact.</Tooltip>} >
+                                                <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip-top">Share your agent.</Tooltip>} >
                                                     <button className="btn btn-sm btn-outline-primary me-2" data-toggle="modal" data-target="#knowledge" onClick={() => triggerShare()}>
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="icon icon-tabler icons-tabler-outline icon-tabler-square-rounded-plus" style={{position: 'relative', top: '-2px'}}><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M6 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M18 6m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M18 18m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M8.7 10.7l6.6 -3.4" /><path d="M8.7 13.3l6.6 3.4" /></svg>
                                                         <span className="d-none d-sm-inline">
                                                             &nbsp;
-                                                            Create a invoice
+                                                            Share agent
+                                                        </span>
+                                                    </button>
+                                                </OverlayTrigger>
+                                                <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip-top">Create an API node.</Tooltip>} >
+                                                    <button className="btn btn-sm btn-outline-primary me-2" data-toggle="modal" data-target="#knowledge" onClick={() => triggerNode()}>
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="icon icon-tabler icons-tabler-outline icon-tabler-code-variable-plus"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M13 16h-7a2 2 0 0 1 -2 -2v-4a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v1" /><path d="M16 18h6" /><path d="M19 15v6" /></svg>
+                                                        <span className="d-none d-sm-inline">
+                                                            &nbsp;
+                                                            Create a node
                                                         </span>
                                                     </button>
                                                 </OverlayTrigger>
@@ -388,11 +403,11 @@ const Organization: React.FC = () => {
                                                         <svg  xmlns="http://www.w3.org/2000/svg" width="45" height="45" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="icon icon-tabler icons-tabler-outline icon-tabler-brand-hipchat me-2"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M8 9h8" /><path d="M8 13h6" /><path d="M9 18h-3a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-3l-3 3l-3 -3z" /></svg>
                                                         <p className="pt-1 pb-1 mb-0 small lh-sm">
                                                             <strong className="d-block text-gray-dark">
-                                                                <a className="text-decoration-none" href={ App.base + '/organization/' + data.workspace.slug + '/profile/' + thread.slug }>{thread.title}</a>
+                                                                <a className="text-decoration-none" href={ App.base + '/organization/' + data.workspace.slug + '/thread/' + thread.slug }>{thread.title}</a>
                                                             </strong>
                                                             <small>
                                                                 <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip-top">Manage conversation-specific knowledge base and send direct messages.</Tooltip>} >
-                                                                    <a href={ App.base + '/organization/' + data.workspace.slug + '/profile/' + thread.slug }>Manage</a>
+                                                                    <a href={ App.base + '/organization/' + data.workspace.slug + '/thread/' + thread.slug }>Manage</a>
                                                                 </OverlayTrigger>
                                                                 &nbsp;
                                                                 -
@@ -440,7 +455,7 @@ const Organization: React.FC = () => {
                                                 <svg style={{width: '80px', height: '80px', cursor: 'pointer'}} viewBox="0 0 24 24" fill="none" stroke="#6c757d" strokeWidth="2"  strokeLinecap="round" strokeLinejoin="round" xmlns="http://www.w3.org/2000/svg" data-toggle="modal" data-target="#knowledge" onClick={() => setData((prevData) => ({ ...prevData, sharingShow: true }))}>
                                                     <path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M6 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M18 6m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M18 18m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M8.7 10.7l6.6 -3.4" /><path d="M8.7 13.3l6.6 3.4" />
                                                 </svg>
-                                                <p className="text-muted mt-3" style={{maxWidth: '600px'}}>Create a custom invoice and share with your customer, once customer visits the url, it will be displayed here.</p>
+                                                <p className="text-muted mt-3" style={{maxWidth: '600px'}}>Create a node in the project pool to be automatically used by your agent.</p>
                                             </div>
                                         }
                                     </>
@@ -493,6 +508,7 @@ const Organization: React.FC = () => {
                 </Modal>  
 
                 <OrganizationShare ref={shareWindowref} workspace={data.workspace} />
+                <OrganizationNode ref={nodeWindowref} workspace={data.workspace} accessKey={data.accessKey} onGetThreads={getThreads} />
             </main>
 
             <Footer />

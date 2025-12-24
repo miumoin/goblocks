@@ -53,6 +53,10 @@ const OrganizationShareInner: ForwardRefRenderFunction<OpenShareWindowHandle, Or
         setData((prevData) => ({ ...prevData, sharingShow: false }));
     };
 
+    const closeNode = async(): Promise<void> => {
+        setData((prevData) => ({ ...prevData, nodeShow: false }));
+    };
+
     useEffect(() => {
         console.log( data.workspace );
     }, [data] );

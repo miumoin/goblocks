@@ -9,7 +9,7 @@ import Contact from './pages/Contact';
 import Knowledge from './pages/Knowledge';
 import Login from './pages/Login';
 import Verify from './pages/Verify';
-import Profile from './pages/Profile';
+import Thread from './pages/Thread';
 import Organization from './pages/Organization';
 import NewOrganization from './pages/NewOrganization';
 import Preference from './pages/Preference';
@@ -27,7 +27,7 @@ const App: React.FC = () => {
                     <Route path="/organization/:slug" element={<Organization />} />
                     <Route path="/organization/:slug/knowledge" element={<Knowledge />} />
                     <Route path="/organization/:slug/preference" element={<Preference />} />
-                    <Route path="/organization/:slug/profile/:profileSlug" element={<Profile />} />
+                    <Route path="/organization/:slug/thread/:threadSlug" element={<Thread />} />
                     <Route path="/:slug" element={<Contact />} />
                     <Route path="/chat/:slug" element={<Chat />} />
                     <Route path="*" element={<NotFound />} />
