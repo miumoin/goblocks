@@ -28,8 +28,7 @@ const App: React.FC = () => {
                     <Route path="/organization/:slug/knowledge" element={<Knowledge />} />
                     <Route path="/organization/:slug/preference" element={<Preference />} />
                     <Route path="/organization/:slug/thread/:threadSlug" element={<Thread />} />
-                    <Route path="/:slug" element={<Contact />} />
-                    <Route path="/chat/:slug" element={<Chat />} />
+                    <Route path="/:slug" element={<Chat />} />
                     <Route path="*" element={<NotFound />} />
                 </Routes>
             </Router>

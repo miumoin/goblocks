@@ -1,3 +1,5 @@
+import React, { useState } from 'react';
+
 export const shortenFileName = (name: string, maxLength: number = 10): string => {
     const parts = name.split('.');
     const extension = parts.pop(); // Extract extension
@@ -81,4 +83,29 @@ export const getInitials = (text:string) => {
   	}
 
   	return (words[0][0] + words[1][0]).toUpperCase();
+};
+
+interface CurlGeneratorProps {
+    endpoint: string;
+    method?: string;
+    headers?: Record<string, string>;
+    body?: any;
+}
+
+export const generateCurl = (props: CurlGeneratorProps): string => {
+    const { endpoint, method = "GET", headers = {}, body = null } = props;
+    
+    let curl = [`curl -X ${method.toUpperCase()}`];
+
+    for (const [key, value] of Object.entries(headers)) {
+        curl.push(`-H "${key}: ${value}"`);
+    }
+
+    if (body && method.toUpperCase() !== "GET") {
+        const jsonBody = typeof body === "string" ? body : JSON.stringify(body);
+        curl.push(`--data '${jsonBody.replace(/'/g, `'\\''`)}'`);
+    }
+
+    curl.push(`"${endpoint}"`);
+    return curl.join(" \\\n  ");
 };

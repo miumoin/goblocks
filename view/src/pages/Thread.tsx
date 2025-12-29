@@ -6,7 +6,7 @@ import Button from 'react-bootstrap/Button';
 import Modal from 'react-bootstrap/Modal';
 import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
 import Tooltip from 'react-bootstrap/Tooltip';
-import {shortenFileName, shortenText, formatDate, shortFormatDate, formatInferenceResponse} from '../components/utils';
+import {shortenFileName, shortenText, formatDate, shortFormatDate, formatInferenceResponse, generateCurl} from '../components/utils';
 import PageLoader from '../components/PageLoader';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -22,10 +22,8 @@ interface dataState {
     slug: string | undefined;
     threadSlug: string | undefined;
     workspace: blockState;
-    knowledges: blockState[];
-    knowledge: blockState;
-    messages: any[];
     thread: blockState;
+    endpoint: string;
     type: string;
     headers: { key: string; value: string }[];
     body: { key: string; value: string }[];
@@ -33,18 +31,6 @@ interface dataState {
     isLoaded: boolean;
     isSubmitted: boolean;
     isValid: boolean;
-    shared: string;
-    isMessagesLoaded: boolean;
-    message: string;
-    isMessageSubmitted: boolean;
-    isMessageValid: boolean;
-    file: any | null;
-    note: string;
-    show: boolean;
-    deletingShow: boolean;
-    deletingKnowledgeId: string;
-    deletingKnowledgeTitle: string;
-    isDeleting: boolean;
     viewShow: boolean;
 }
 
@@ -58,32 +44,17 @@ const Thread: React.FC = () => {
         slug: slug,
         threadSlug: threadSlug,
         workspace: { id: '', slug: '', title: '' },
-        thread: { id: '', slug: '', title: '', content: { type: 'GET', body: [], headers: [] } },
-        knowledges: [],
-        knowledge: { id: '', slug: '', title: '' },
-        messages: [],
+        thread: { id: '', slug: '', title: '', content: { endpoint: '', type: 'GET', body: [], headers: [] } },
         type: 'GET',
+        endpoint: '',
         headers: [],
         body: [],
         executions: [],
         isLoaded: false,
         isSubmitted: false,
         isValid: false,
-        shared: 'false',
-        isMessagesLoaded: false,
-        message: '',
-        isMessageSubmitted: false,
-        isMessageValid: false,
-        file: null,
-        note: '',
-        show: false,
-        deletingShow: false,
-        deletingKnowledgeId: '',
-        deletingKnowledgeTitle: '',
-        isDeleting: false,
         viewShow: false
     });
-    const messagesRef = useRef(data.messages);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -103,25 +74,8 @@ const Thread: React.FC = () => {
     useEffect(() => {
         if( data.workspace.id != '' ) {
             getProfile( '' );
-
-            /* Set interval to test endpoint avilability every 60 seconds *
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-            }
-    
-            intervalRef.current = setInterval(() => {
-                let messages = messagesRef.current;
-                if( messages.length > 0 ) {
-                    getProfileStatus( messages[ messages.length - 1]['id'] );
-                }
-            }, 30000);*/
         }
     }, [data.workspace]);
-
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        messagesRef.current = data.messages;
-    }, [data.messages.length]);
 
     const getWorkspace = async () : Promise<void> => {
         const response = await fetch(App.api_base + '/workspace/' + data.slug, {
@@ -161,11 +115,12 @@ const Thread: React.FC = () => {
         const res = await response.json();
 
         if (res.status === 'success') {
-            let messages = messagesRef.current;
-            messages = messages.concat(res.messages);
             let thread = res.thread;
             if( thread.content != undefined ) {
                 thread.content = JSON.parse( thread.content );
+            }
+            if( thread.content.endpoint == undefined ) {
+                thread.content.endpoint = '';
             }
             if( thread.content.type == undefined ) {
                 thread.content.type = 'GET';
@@ -176,38 +131,9 @@ const Thread: React.FC = () => {
             if( thread.content.headers == undefined ) {
                 thread.content.headers = [];
             }
-            setData((prevData) => ({ ...prevData, messages: messages, thread: res.thread, type: thread.content.type, body: thread.content.body, headers: thread.content.headers }));
+            setData((prevData) => ({ ...prevData, thread: res.thread, endpoint: thread.content.endpoint, type: thread.content.type, body: thread.content.body, headers: thread.content.headers }));
         }
     };
-
-    /*const sendMessage = async (e: React.FormEvent) : Promise<void> => {
-        e.preventDefault();
-        if( data.message.trim() == '' ) setData((prevData) => ({ ...prevData, isMessageValid: false }));
-        else {
-            const response = await fetch(App.api_base + '/workspace/' + data.slug + '/profile/' + threadSlug + '/messages/send', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Vuedoo-Domain': App.domain,
-                    'X-Vuedoo-Access-Key': data.accessKey
-                },
-                body: JSON.stringify({ message: data.message })
-            });
-
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-
-            const res = await response.json();
-
-            if (res.status === 'success') {
-                var messages = data.messages;
-                if( res.message ) messages.push(res.message);
-                setData((prevData) => ({ ...prevData, message: '', isMessageValid: false, messages: messages }));
-            }
-        }
-    };
-    */
 
     return (
         <>
@@ -232,7 +158,8 @@ const Thread: React.FC = () => {
                                         <button className="btn btn-sm btn-outline-primary" id="save-thread-btn" onClick={async () => {
                                             let content = {
                                                 description: data.thread.content.description,
-                                                type: data.thread.content.type,
+                                                endpoint: data.endpoint,
+                                                type: data.type,
                                                 headers: data.headers,
                                                 body: data.body
                                             };
@@ -265,7 +192,43 @@ const Thread: React.FC = () => {
                                     </OverlayTrigger>
                                     &nbsp;
                                     <OverlayTrigger placement="top" overlay={<Tooltip>Test the endpoint.</Tooltip>} >
-                                        <button className="btn btn-outline-primary btn-sm me-2" data-toggle="modal" data-target="#knowledge">
+                                        <button className="btn btn-outline-primary btn-sm me-2" id="test-endpoint-btn" onClick={async () => {
+                                            let content = {
+                                                description: data.thread.content.description,
+                                                endpoint: data.endpoint,
+                                                type: data.type,
+                                                headers: data.headers,
+                                                body: data.body
+                                            };
+
+                                            const headersObj = content.headers.reduce((acc: Record<string, string>, h) => { if (h.key) acc[h.key] = h.value; return acc; }, {});
+                                            const bodyObj = content.body.reduce((acc: Record<string, string>, b) => { if (b.key) acc[b.key] = b.value; return acc; }, {});
+                                            document.getElementById('command-text')!.textContent = generateCurl({endpoint: content.endpoint, method: content.type, headers: headersObj, body: bodyObj});
+                                            document.getElementById('test-endpoint-btn')?.classList.add('disabled'); 
+                                            const response = await fetch(App.api_base + '/workspace/' + data.slug + '/thread/' + data.threadSlug + '/execute', {
+                                                method: 'POST',
+                                                headers: {
+                                                    'Content-Type': 'application/json',
+                                                    'X-Vuedoo-Domain': App.domain,
+                                                    'X-Vuedoo-Access-Key': data.accessKey
+                                                },
+                                                body: JSON.stringify( content )
+                                            });
+
+                                            if (!response.ok) {
+                                                throw new Error('Network response was not ok');
+                                            }
+
+                                            const res = await response.json();
+
+                                            if (res.status === 'success') {
+                                                let newExecutions = [ res.execution ].concat( data.executions );
+                                                setData((prevData) => ({ ...prevData, executions: newExecutions }));
+                                                document.getElementById('command-result')!.textContent = JSON.stringify( res.data, null, 2 );
+                                                document.getElementById('command-result-block')!.style.display = 'flex';
+                                                document.getElementById('test-endpoint-btn')?.classList.remove('disabled');
+                                            }
+                                        }}>
                                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="icon icon-tabler icons-tabler-outline icon-tabler-square-rounded-plus" style={{position: 'relative', top: '-1px'}}><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M5 18m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /><path d="M19 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" /><path d="M19 8v5a5 5 0 0 1 -5 5h-3l3 -3m0 6l-3 -3" /><path d="M5 16v-5a5 5 0 0 1 5 -5h3l-3 -3m0 6l3 -3" /></svg>
                                             <span className="d-none d-sm-inline">
                                                 &nbsp;
@@ -293,6 +256,17 @@ const Thread: React.FC = () => {
                                                         rows={4}
                                                         placeholder="Enter a description for this configuration..."
                                                         defaultValue={data.thread.content?.description || '' }
+                                                        onChange={(e) =>
+                                                            setData((prevData) => ({
+                                                                ...prevData, thread: {
+                                                                    ...prevData.thread,
+                                                                    content: {
+                                                                        ...prevData.thread.content,
+                                                                        description: e.target.value
+                                                                    }
+                                                                }
+                                                            }))
+                                                        }   
                                                     />
                                                 </div>
 
@@ -301,9 +275,9 @@ const Thread: React.FC = () => {
                                                     <select
                                                         id="type"
                                                         className="form-select"
-                                                        value={(data.thread.content.type as any).method || 'GET'}
+                                                        value={data.type || 'GET'}
                                                         onChange={(e) =>
-                                                            setData((prevData) => ({ ...(prevData as any), type: { method: e.target.value } }))
+                                                            setData((prevData) => ({ ...(prevData as any), type: e.target.value }))
                                                         }
                                                     >
                                                         <option value="GET">GET</option>
@@ -323,7 +297,10 @@ const Thread: React.FC = () => {
                                                         type="text"
                                                         className="form-control"
                                                         placeholder="https://api.example.com/v1/..."
-                                                        defaultValue={''}
+                                                        value={data.endpoint || ''}
+                                                        onChange={(e) =>
+                                                            setData((prevData) => ({ ...(prevData as any), endpoint: e.target.value }))
+                                                        }
                                                     />
                                                 </div>
 
@@ -439,42 +416,18 @@ const Thread: React.FC = () => {
                                     </div>
                                     <div className="col-md-6 mb-3" style={{display: 'flex', flexDirection: 'column'}}>
                                         <div className="d-flex justify-content-between align-items-center border-bottom pb-1 mb-0">
-                                            <h6>Execution history</h6>
+                                            <h6>Result</h6>
                                         </div>
-
-                                        { data.thread.collected_information && Object.keys(data.thread.collected_information).length > 0 && 
-                                            <div className="text-body-secondary pt-3">
-                                                <p className="pt-1 pb-1 mb-0 small">
-                                                    <strong className="d-block text-gray-dark">Summary</strong>
-                                                </p>
-
-                                                <table border={1} cellPadding="8" style={{ borderCollapse: 'collapse' , width: '100%' }}>
-                                                    <tbody>
-                                                        
-                                                    </tbody>
-                                                </table>
+                                        
+                                        &nbsp;
+                                        
+                                        <div style={{backgroundColor: '#1e1e1e', color: '#00ff00', border: '1px solid #444', borderRadius: '4px', padding: '12px', fontFamily: 'Courier New, monospace', fontSize: '13px', lineHeight: '1.6', minHeight: '50px', overflowY: 'auto'}}>
+                                            <div>$ <span id="command-text" style={{ flexGrow: 1 }}></span></div>
+                                            <div id="command-result-block" style={{ display: 'none', alignItems: 'center', overflowX: 'auto', marginTop: '10px' }}>
+                                                <span style={{ marginRight: 8, position: 'sticky', top: 0, alignSelf: 'flex-start', zIndex: 2 }}>$</span>
+                                                <pre id="command-result" style={{ flexGrow: 1 }}></pre>
                                             </div>
-                                        }
-
-                                        { data.knowledges.length > 0 ? 
-                                            <>
-                                                {data.knowledges.map((knowledge:blockState, index) => (
-                                                    <div className="d-flex text-body-secondary pt-3" key={knowledge.id}>
-                                                        <svg xmlns="http://www.w3.org/2000/svg" width="45" height="45" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="icon icon-tabler icons-tabler-outline icon-tabler-file-text me-2"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z" /><path d="M9 9l1 0" /><path d="M9 13l6 0" /><path d="M9 17l6 0" /></svg>
-                                                        <p className="pt-1 pb-1 mb-0 small">
-                                                            <strong className="d-block text-gray-dark">{shortenFileName( knowledge.title, 35 )}</strong>
-                                                        </p>
-                                                    </div>
-                                                ))}
-                                            </>
-                                            :
-                                            <div className="empty-space" style={{height: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', textAlign: 'center'}}>
-                                                <svg style={{width: '80px', height: '80px', fill: '#6c757d'}} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                                    <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4z"/>
-                                                </svg>
-                                                <p className="text-muted mt-3">No successful execution found in the history.</p>
-                                            </div>
-                                        }
+                                        </div>
                                     </div>
                                 </div>
                             </div>

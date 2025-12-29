@@ -42,6 +42,8 @@ func (ac *ApiController) RegisterApiRoutes() {
 		apiGroup.GET("/workspace/:slug/thread/:threadSlug", ac.GetThread)
 		apiGroup.POST("/workspace/:slug/thread/:threadSlug/update", ac.UpdateThread)
 		apiGroup.POST("/workspace/:slug/thread/delete", ac.DeleteThread)
+		apiGroup.POST("/workspace/:slug/thread/:threadSlug/execute", ac.ExecuteThread)
+		apiGroup.GET("/agent/:slug/init", ac.InitAgent)
 		apiGroup.GET("/welcome", ac.ApiWelcome)
 	}
 }
@@ -384,7 +386,7 @@ func (ac *ApiController) UpdateWorkspace(c *gin.Context) {
 	slug := c.Param("slug")
 
 	var request struct {
-		Stripe_secret_key string `json:"stripe_secret_key"`
+		Description string `json:"description"`
 	}
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -411,7 +413,7 @@ func (ac *ApiController) UpdateWorkspace(c *gin.Context) {
 	if slug != "" {
 		workspace, err := databaseManager.GetBlock(userID, "workspace", 0, slug, 0)
 		if workspace != nil && err == nil {
-			databaseManager.AddMeta("workspace", workspace["id"].(int64), "stripe_secret_key", request.Stripe_secret_key)
+			databaseManager.AddMeta("workspace", workspace["id"].(int64), "description", request.Description)
 		}
 	}
 
@@ -552,6 +554,7 @@ func (ac *ApiController) UpdateThread(c *gin.Context) {
 
 	var content struct {
 		Description string              `json:"description"`
+		Endpoint    string              `json:"endpoint"`
 		Type        string              `json:"type"`
 		Headers     []map[string]string `json:"headers"`
 		Body        []map[string]string `json:"body"`
@@ -596,6 +599,7 @@ func (ac *ApiController) UpdateThread(c *gin.Context) {
 
 				contentJSON, err := json.Marshal(map[string]interface{}{
 					"description": content.Description,
+					"endpoint":    content.Endpoint,
 					"type":        content.Type,
 					"headers":     content.Headers,
 					"body":        content.Body,
@@ -696,6 +700,113 @@ func (ac *ApiController) DeleteThread(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": map[bool]string{true: "success", false: "fail"}[deleted],
 	})
+}
+
+func (ac *ApiController) ExecuteThread(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+	slug := c.Param("slug")
+	threadSlug := c.Param("threadSlug")
+
+	var content struct {
+		Endpoint string              `json:"endpoint"`
+		Type     string              `json:"type"`
+		Headers  []map[string]string `json:"headers"`
+		Body     []map[string]string `json:"body"`
+	}
+
+	if err := c.BindJSON(&content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail"})
+		return
+	}
+
+	fmt.Println("ExecuteThread - Content:", content)
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":     "fail",
+			"workspaces": nil,
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+	workspace, err := databaseManager.GetBlock(userID, "workspace", 0, slug, 0)
+	if err != nil || workspace == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":    "fail",
+			"workspace": nil,
+			"thread":    nil,
+		})
+		return
+	}
+
+	thread, err := databaseManager.GetBlock(userID, "thread", 0, threadSlug, 0)
+	if err != nil || thread == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":    "fail",
+			"workspace": nil,
+			"thread":    nil,
+		})
+		return
+	}
+
+	utils := services.NewUtilities(ac.db)
+	execData, _ := utils.ExecuteApi(content.Endpoint, content.Type, content.Headers, content.Body)
+
+	// Implementation for executing a thread goes here
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   execData,
+	})
+}
+
+func (ac *ApiController) InitAgent(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+	slug := c.Param("slug")
+	page := c.Param("page")
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":     "fail",
+			"workspaces": nil,
+		})
+		return
+	}
+
+	var workspaceID int64
+	var userID int64
+	err := ac.db.QueryRow("SELECT id, author FROM blocks WHERE slug = ?", slug).Scan(&workspaceID, &userID)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":    "fail",
+			"workspace": nil,
+			"threads":   nil,
+		})
+		return
+	}
+
+	if slug != "" {
+		workspace, err := databaseManager.GetBlock(userID, "workspace", 0, slug, 0)
+		if workspace != nil && err == nil {
+			c.JSON(http.StatusOK, gin.H{
+				"status":    "success",
+				"workspace": workspace,
+				"page":      page,
+				"limit":     20,
+				"threads":   []map[string]interface{}{},
+			})
+		}
+	} else {
+		c.JSON(http.StatusOK, gin.H{
+			"status":    "fail",
+			"workspace": map[string]interface{}{},
+			"threads":   []map[string]interface{}{},
+		})
+	}
 }
 
 /*

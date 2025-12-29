@@ -98,7 +98,7 @@ const Preference: React.FC = () => {
                         'X-Vuedoo-Domain': App.domain,
                         'X-Vuedoo-Access-Key': data.accessKey
                     },
-                    body: JSON.stringify({ title: data.workspace.title, stripe_secret_key: data.workspace.metas.stripe_secret_key })
+                    body: JSON.stringify({ title: data.workspace.title, description: data.workspace.metas.description })
                 });
 
                 if (!response.ok) {
@@ -108,7 +108,7 @@ const Preference: React.FC = () => {
                 const res = await response.json();
 
                 if (res.status === 'success') {
-                    //window.location.reload();
+                    window.location.reload();
                 }
 
                 return 0;
@@ -261,14 +261,14 @@ const Preference: React.FC = () => {
                                 </div>
                                 <div className="row my-3">
                                     <div className="col-md-4">
-                                        <label className="mb-0">Stripe secret key</label>
+                                        <label className="mb-0">Description</label>
                                     </div>
 
                                     <div className="col-md-8">
-                                        <input 
+                                        <textarea
                                             className="form-control" 
-                                            value={(data.workspace.metas.stripe_secret_key != undefined ? data.workspace.metas.stripe_secret_key : '')} 
-                                            placeholder="Stripe secret key" 
+                                            value={(data.workspace.metas.description != undefined ? data.workspace.metas.description : '')} 
+                                            placeholder="Describe your project" 
                                             maxLength={140}
                                             onChange={(e) => setData((prevData) => ({ 
                                                 ...prevData, 
@@ -276,14 +276,14 @@ const Preference: React.FC = () => {
                                                     ...prevData.workspace, 
                                                     metas: { 
                                                         ...prevData.workspace.metas, 
-                                                        stripe_secret_key: e.target.value 
+                                                        description: e.target.value 
                                                     }
                                                 }
                                             }))}
-                                        />
+                                        >
+                                        </textarea>
                                     </div>
                                 </div>
-
                                 <div className="row my-3">
                                     <div className="col-md-12" style={{ textAlign: 'right' }}>
                                         <button className="btn btn-primary" onClick={saveWorkspace} disabled={data.isSubmitted && data.isValid}>Save</button>

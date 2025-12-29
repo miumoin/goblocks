@@ -489,3 +489,69 @@ func (u *Utilities) GetSubscriberUserID(db *sql.DB, customerID, subscriptionID s
 
 	return parentID, nil
 }
+
+func (u *Utilities) ExecuteApi(Endpoint string, ApiType string, Headers []map[string]string, Body []map[string]string) (interface{}, error) {
+	// Normalize method
+	method := ApiType
+	if method == "" {
+		method = "GET"
+	}
+
+	// Build request body if needed
+	var bodyBytes []byte
+	if method != "GET" && len(Body) > 0 {
+		fmt.Println("Body:", Body)
+		bodyMap := map[string]interface{}{}
+		for _, entry := range Body {
+			for k, v := range entry {
+				bodyMap[k] = v
+			}
+		}
+		b, _ := json.Marshal(bodyMap)
+		bodyBytes = b
+	}
+
+	// Create request
+	var reqBody io.Reader
+	if len(bodyBytes) > 0 {
+		reqBody = bytes.NewBuffer(bodyBytes)
+	}
+
+	req, err := http.NewRequest(method, Endpoint, reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println("Headers:", Headers)
+	// Attach headers from the thread content
+	for _, h := range Headers {
+		headerKey, ok1 := h["key"]
+		headerValue, ok2 := h["value"]
+
+		if ok1 && ok2 {
+			req.Header.Set(headerKey, headerValue)
+		}
+	}
+
+	// Ensure Content-Type when we have a body
+	if len(bodyBytes) > 0 && req.Header.Get("Content-Type") == "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	// Execute the HTTP request
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	// Try to decode JSON response, fall back to status text if not JSON
+	var respData interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&respData); err != nil {
+		respData = map[string]interface{}{
+			"status": resp.Status,
+		}
+	}
+
+	return respData, nil
+}

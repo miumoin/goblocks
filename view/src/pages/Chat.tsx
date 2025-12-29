@@ -41,7 +41,7 @@ const Chat: React.FC = () => {
         messages: [],
         file: null,
         isFileUploading: false,
-        isLoaded: false,
+        isLoaded: true,
         isError: false,
         isKnowledgeReady: false,
         isMessagesLoaded: false,
@@ -54,8 +54,8 @@ const Chat: React.FC = () => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     useEffect(() => {
-        prepareKnowledge( data.slug );
-        getMessages( data.slug, '' );
+        prepareAgent( data.slug );
+        //getMessages( data.slug, '' );
     }, []);
 
     useEffect(() => {
@@ -70,13 +70,6 @@ const Chat: React.FC = () => {
         if (intervalRef.current) {
             clearInterval(intervalRef.current);
         }
-
-        intervalRef.current = setInterval(() => {
-            let messages = messagesRef.current;
-            if( messages.length > 0 ) {
-                getMessages( data.slug, messages[ messages.length - 1]['id'] );
-            }
-        }, 60000);
     }, [data.isKnowledgeReady]);
 
     //send file message if file is selected
@@ -92,15 +85,14 @@ const Chat: React.FC = () => {
         }
     };
 
-    const getMessages = async ( slug: string|undefined, after: string ) : Promise<void> => {
-        const response = await fetch(App.api_base + '/chat/' + data.slug + '/messages', {
-            method: 'POST',
+    const prepareAgent = async ( slug: string|undefined ) : Promise<void> => {
+        const response = await fetch(App.api_base + '/agent/' + data.slug + '/init', {
+            method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Vuedoo-Domain': App.domain,
                 'X-Vuedoo-Access-Key': data.accessKey
-            },
-            body: JSON.stringify({ after: after })
+            }
         });
 
         if (!response.ok) {
@@ -119,30 +111,12 @@ const Chat: React.FC = () => {
     };
 
     /*
-        ** keep the message sending button disabled untile knowledge is prepared
-        **
+    * Send Command to the agent
+    * Prepare a list of nodes, input list for first node
+    * Call API with inputs, get outputs
+    * Make inference calls to identify inputs for next nodes from outputs of previous nodes
+    * Continue until all nodes are processed or breaks somewhere
     */
-    const prepareKnowledge = async ( slug: string|undefined ) : Promise<void> => {
-        const response = await fetch(App.api_base + '/chat/' + data.slug + '/prepare', {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Vuedoo-Domain': App.domain,
-                'X-Vuedoo-Access-Key': data.accessKey
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-
-        const res = await response.json();
-
-        if (res.status === 'success') {
-            setData((prevData) => ({ ...prevData, isKnowledgeReady: true }));
-        }
-    };
-
     const sendMessage = async (e: React.FormEvent) : Promise<void> => {
         e.preventDefault();
         if( data.message.trim() == '' ) setData((prevData) => ({ ...prevData, isMessageValid: false }));
@@ -232,7 +206,6 @@ const Chat: React.FC = () => {
                 const res = await response.json();
             
                 if (res.status === "success") {
-                    prepareKnowledge(data.slug);
 
                     var messages = data.messages;
                     if( res.message ) messages.push(res.message);
@@ -242,29 +215,6 @@ const Chat: React.FC = () => {
                 }
             } catch (error) {
                 console.error("Error uploading file:", error);
-            }
-        }
-    };
-
-    const viewKnowledge = async( id: string ): Promise<void> => {
-        const response = await fetch(`${App.api_base}/chat/${data.workspace.slug}/file/${data.profile.id}/${id}`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Vuedoo-Domain': App.domain,
-                'X-Vuedoo-Access-Key': ''
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-
-        const res = await response.json();
-
-        if (res.status === 'success') {
-            if( res.knowledge != undefined && res.knowledge.file != undefined ) {
-                window.open( res.knowledge.file, '_blank' );
             }
         }
     };
@@ -297,10 +247,10 @@ const Chat: React.FC = () => {
         <>
             <header className="container mt-4 border-bottom">
                 <div className="d-flex justify-content-center gap-3">
-                    <div className="avatar" style={{ width: '100px', height: '100px', objectFit: 'cover', fontSize: '45px', fontWeight: 'bold', backgroundImage: ( data.workspace.metas.logo != undefined ? 'url(' + data.workspace.metas.logo + ')' : 'none' ), backgroundSize: 'cover' }}>{ data.workspace.metas.logo != undefined ? '' : getInitials(data.workspace.title) }</div>
+                    <div className="avatar" style={{ objectFit: 'cover', fontSize: '45px', fontWeight: 'bold', backgroundImage: ( data.workspace.metas.logo != undefined ? 'url(' + data.workspace.metas.logo + ')' : 'none' ), backgroundSize: 'cover' }}>{ data.workspace.metas.logo != undefined ? '' : data.workspace.title }</div>
                 </div>
                 <div className="d-flex justify-content-center gap-3 mt-3">
-                    <p className="font-weight-bold">{(data.workspace.metas.description != undefined ? data.workspace.metas.description : data.workspace.title)}</p>
+                    <p className="font-weight-bold">{(data.workspace.metas.description != undefined ? data.workspace.metas.description : "&nbsp;")}</p>
                 </div>
             </header>
 
@@ -308,57 +258,6 @@ const Chat: React.FC = () => {
                 <div className="container my-3 p-1 p-md-3 bg-body shadow-sm" style={{minHeight: '60vh'}}>
                     { data.isLoaded ? 
                         <>
-                            
-                            { data.messages.length > 0 && 
-                                <div style={{height: '50vh', display: 'flex', justifyContent: 'bottom', flexDirection: 'column', overflowY: 'scroll'}}>
-                                    {data.messages.map((message:blockState, index) => (
-                                        <div className="message-container mb-3" key={message.slug}>
-                                            {(() => {
-                                                if (message.type === 'message') {
-                                                    return (
-                                                        <div className={`d-flex justify-content-${message.author > 0 ? 'start' : 'end'} my-2`}>
-                                                            <div className={`border ${message.author > -1 ? 'bg-secondary' : 'bg-primary'} rounded p-2`} style={{maxWidth: message.author != 0 ? '80%' : '100%'}}>
-                                                                <p className="pt-1 pb-0 mb-0 small" style={{ whiteSpace: 'pre-wrap' }} dangerouslySetInnerHTML={{ __html: formatInferenceResponse(message.content) }}></p>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                } else if (message.type === 'knowledge') {
-                                                    return (
-                                                        <div className={`d-flex justify-content-${message.author > 0 ? 'start' : 'end'} my-2`}>
-                                                            <div className={`border rounded p-2`} style={{maxWidth: message.author != 0 ? '80%' : '100%'}}>
-                                                                <p className="pt-1 pb-0 mb-0 small">
-                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="icon icon-tabler icons-tabler-outline icon-tabler-file-check" style={{top: '-2px', position: 'relative'}}><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z" /><path d="M9 15l2 2l4 -4" /></svg>
-                                                                    {message.author < 1 || (message.metas != undefined && message.metas.shared == 'true') 
-                                                                        ? <a href="javascript:void(0)" onClick={() => viewKnowledge(message.id)}>{message.title}</a>
-                                                                    : 'New information added'}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                }
-                                                return null;
-                                            })()}
-
-                                            <p className="pt-0 pb-1 mb-0 small" style={{fontSize: '70%', textAlign: (message.author > 0 ? 'left' : 'right')}}>
-                                                {shortFormatDate(message.created_at)}
-                                            </p>
-
-                                            { message.author < 0 && 
-                                                <>
-                                                { message.generated_response != undefined ?
-                                                    <div className={`text-light bg-dark border rounded p-2 mt-3`}>
-                                                        <p className="pt-1 pb-0 mb-0 small" dangerouslySetInnerHTML={{ __html: formatInferenceResponse(message.generated_response) }}></p>
-                                                    </div>
-                                                    :
-                                                    <Loader/>
-                                                }
-                                                </>
-                                            }
-                                        </div>
-                                    ))}
-                                    <div ref={messagesEndRef} />
-                                </div>
-                            }
                             <div style={{ 
                                 height: data.messages.length === 0 ? '50vh' : 'auto',
                                 display: 'flex',
@@ -396,7 +295,7 @@ const Chat: React.FC = () => {
                                             className="form-control"
                                             rows={2}
                                             value={data.message}
-                                            placeholder={'Say anything to ' + data.workspace.title + '...'}
+                                            placeholder={'Make a command to ' + data.workspace.title + '...'}
                                             onChange={(e) => { 
                                                 setData((prevData) => ({ 
                                                     ...prevData, 
@@ -418,6 +317,24 @@ const Chat: React.FC = () => {
                                         />
                                     </div>
                                 </form>
+                            </div>
+                            <div className="mt-4">
+                                <div style={{
+                                    backgroundColor: '#1e1e1e',
+                                    color: '#00ff00',
+                                    border: '1px solid #444',
+                                    borderRadius: '4px',
+                                    padding: '12px',
+                                    fontFamily: 'Courier New, monospace',
+                                    fontSize: '13px',
+                                    lineHeight: '1.6',
+                                    maxHeight: '200px',
+                                    overflowY: 'auto'
+                                }}>
+                                    <div>$ {data.workspace.title} initialized</div>
+                                    <div>$ Waiting for input...</div>
+                                    <div>$ Ready for commands</div>
+                                </div>
                             </div>
                         </>
                         :
