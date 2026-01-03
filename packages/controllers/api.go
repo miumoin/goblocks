@@ -44,6 +44,7 @@ func (ac *ApiController) RegisterApiRoutes() {
 		apiGroup.POST("/workspace/:slug/thread/delete", ac.DeleteThread)
 		apiGroup.POST("/workspace/:slug/thread/:threadSlug/execute", ac.ExecuteThread)
 		apiGroup.GET("/agent/:slug/init", ac.InitAgent)
+		apiGroup.POST("/agent/:slug/gettasks", ac.GetTasks)
 		apiGroup.GET("/welcome", ac.ApiWelcome)
 	}
 }
@@ -766,7 +767,6 @@ func (ac *ApiController) InitAgent(c *gin.Context) {
 	domain := c.GetHeader("X-Vuedoo-Domain")
 	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
 	slug := c.Param("slug")
-	page := c.Param("page")
 
 	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
 	if dErr != nil {
@@ -795,8 +795,6 @@ func (ac *ApiController) InitAgent(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
 				"status":    "success",
 				"workspace": workspace,
-				"page":      page,
-				"limit":     20,
 				"threads":   []map[string]interface{}{},
 			})
 		}
@@ -806,6 +804,106 @@ func (ac *ApiController) InitAgent(c *gin.Context) {
 			"workspace": map[string]interface{}{},
 			"threads":   []map[string]interface{}{},
 		})
+	}
+}
+
+func (ac *ApiController) GetTasks(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+	slug := c.Param("slug")
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":     "fail",
+			"workspaces": nil,
+		})
+		return
+	}
+
+	var workspaceID int64
+	var userID int64
+	err := ac.db.QueryRow("SELECT id, author FROM blocks WHERE slug = ?", slug).Scan(&workspaceID, &userID)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":    "fail",
+			"workspace": nil,
+			"threads":   nil,
+		})
+		return
+	}
+
+	if slug != "" {
+		workspace, err := databaseManager.GetBlock(userID, "workspace", 0, slug, 0)
+		if workspace != nil && err == nil {
+
+			// Dummy tasks for demonstration purposes
+			tasks := []map[string]interface{}{
+				{
+					"id":          1,
+					"description": "Fetch resources from the API and prepare them for processing.",
+					"status":      0,
+					"node": map[string]interface{}{
+						"endpoint": "https://api.example.com/v1/resource",
+						"method":   "GET",
+						"headers": map[string]string{
+							"Content-Type":  "application/json",
+							"Authorization": "Bearer token123",
+						},
+						"body": map[string]string{},
+					},
+					"outputs": map[string]interface{}{},
+				},
+				{
+					"id":          2,
+					"description": "Update the resource status to processing.",
+					"status":      0,
+					"node": map[string]interface{}{
+						"endpoint": "https://api.example.com/v1/resource/123",
+						"method":   "POST",
+						"headers": map[string]string{
+							"Content-Type":  "application/json",
+							"Authorization": "Bearer token123",
+						},
+						"body": map[string]string{
+							"status":     "processing",
+							"updated_at": "2024-01-01T00:00:00Z",
+						},
+					},
+					"outputs": map[string]interface{}{},
+				},
+				{
+					"id":          3,
+					"description": "Send a notification that the task has completed.",
+					"status":      0,
+					"node": map[string]interface{}{
+						"endpoint": "https://api.example.com/v1/notify",
+						"method":   "POST",
+						"headers": map[string]string{
+							"Content-Type":  "application/json",
+							"Authorization": "Bearer token123",
+						},
+						"body": map[string]string{
+							"message": "Task completed successfully",
+							"user_id": "user_123",
+						},
+					},
+					"outputs": map[string]interface{}{},
+				},
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"status":    "success",
+				"workspace": workspace,
+				"tasks":     tasks,
+			})
+		} else {
+			c.JSON(http.StatusOK, gin.H{
+				"status":    "fail",
+				"workspace": map[string]interface{}{},
+				"tasks":     []map[string]interface{}{},
+			})
+		}
 	}
 }
 

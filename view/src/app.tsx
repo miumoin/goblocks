@@ -4,7 +4,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import ReactDOM from 'react-dom/client';
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import Home from './pages/Home';
-import Chat from './pages/Chat';
+import Agent from './pages/Agent';
 import Contact from './pages/Contact';
 import Knowledge from './pages/Knowledge';
 import Login from './pages/Login';
@@ -28,7 +28,7 @@ const App: React.FC = () => {
                     <Route path="/organization/:slug/knowledge" element={<Knowledge />} />
                     <Route path="/organization/:slug/preference" element={<Preference />} />
                     <Route path="/organization/:slug/thread/:threadSlug" element={<Thread />} />
-                    <Route path="/:slug" element={<Chat />} />
+                    <Route path="/:slug" element={<Agent />} />
                     <Route path="*" element={<NotFound />} />
                 </Routes>
             </Router>

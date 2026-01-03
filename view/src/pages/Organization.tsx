@@ -215,7 +215,7 @@ const Organization: React.FC = () => {
     };
 
     function formatDate(json: { date: string; timezone: string }): string {
-        const utcDate = new Date(json.date + 'Z'); // Append 'Z' to handle UTC
+        const utcDate = new Date(json.date); // Append 'Z' to handle UTC
         
         const day = utcDate.getUTCDate();
         const suffix = (day % 10 === 1 && day !== 11) ? 'st' 
@@ -406,8 +406,8 @@ const Organization: React.FC = () => {
                                                                 <a className="text-decoration-none" href={ App.base + '/organization/' + data.workspace.slug + '/thread/' + thread.slug }>{thread.title}</a>
                                                             </strong>
                                                             <small>
-                                                                <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip-top">Manage conversation-specific knowledge base and send direct messages.</Tooltip>} >
-                                                                    <a href={ App.base + '/organization/' + data.workspace.slug + '/thread/' + thread.slug }>Manage</a>
+                                                                <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip-top">View details and edit the node.</Tooltip>} >
+                                                                    <a href={ App.base + '/organization/' + data.workspace.slug + '/thread/' + thread.slug }>View</a>
                                                                 </OverlayTrigger>
                                                                 &nbsp;
                                                                 -
@@ -418,14 +418,8 @@ const Organization: React.FC = () => {
                                                                 &nbsp;
                                                                 -
                                                                 &nbsp;
-                                                                <OverlayTrigger placement="top" overlay={<Tooltip id="tooltip-top">Copy the conversation link to share with the contact person.</Tooltip>} >
-                                                                    <a href="javascript:void(0)" id={'copy_button_' + thread.id} onClick={() => copyText(thread.id, App.base + '/chat/' + thread.slug)}>Copy URL</a>
-                                                                </OverlayTrigger>
                                                                 <span className="d-none d-sm-inline-block">
-                                                                    &nbsp;
-                                                                    -
-                                                                    &nbsp;
-                                                                    Added on {formatDate( thread.created_at )}
+                                                                    Added on {formatDate( {date: thread.created_at, timezone: 'UTC'} )}
                                                                 </span>
                                                             </small>
                                                         </p>

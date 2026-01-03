@@ -386,6 +386,7 @@ const Thread: React.FC = () => {
 
                                                                                 setData((prev) => ({ ...prev, body: filtered }));
                                                                             }}
+                                                                            disabled={data.type === 'GET' || data.type === 'HEAD' ? true : false}
                                                                         />
                                                                     </div>
                                                                     <div className="col-6">
@@ -404,6 +405,7 @@ const Thread: React.FC = () => {
                                                                                 const filtered = newBody.filter((h, i) => (h.key.trim() !== '' || h.value.trim() !== '') || i === newBody.length - 1);
                                                                                 setData((prev) => ({ ...prev, body: filtered }));
                                                                             }}
+                                                                            disabled={data.type === 'GET' || data.type === 'HEAD' ? true : false}
                                                                         />
                                                                     </div>
                                                                 </div>
@@ -420,7 +422,7 @@ const Thread: React.FC = () => {
                                         </div>
                                         
                                         &nbsp;
-                                        
+
                                         <div style={{backgroundColor: '#1e1e1e', color: '#00ff00', border: '1px solid #444', borderRadius: '4px', padding: '12px', fontFamily: 'Courier New, monospace', fontSize: '13px', lineHeight: '1.6', minHeight: '50px', overflowY: 'auto'}}>
                                             <div>$ <span id="command-text" style={{ flexGrow: 1 }}></span></div>
                                             <div id="command-result-block" style={{ display: 'none', alignItems: 'center', overflowX: 'auto', marginTop: '10px' }}>

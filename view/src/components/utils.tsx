@@ -109,3 +109,6 @@ export const generateCurl = (props: CurlGeneratorProps): string => {
     curl.push(`"${endpoint}"`);
     return curl.join(" \\\n  ");
 };
+
+export const fakeSleep = (ms: number): Promise<void> =>
+  new Promise(resolve => setTimeout(resolve, ms));
