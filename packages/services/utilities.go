@@ -2,6 +2,7 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"database/sql"
 	"encoding/hex"
@@ -17,6 +18,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/gin-gonic/gin"
 )
 
@@ -554,4 +559,72 @@ func (u *Utilities) ExecuteApi(Endpoint string, ApiType string, Headers []map[st
 	}
 
 	return respData, nil
+}
+
+// write a function that makes an inference with a prompt
+func GenerateBedrockText(prompt string, messages []map[string]string) (string, error) {
+	ctx := context.Background()
+
+	// Load AWS config
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(os.Getenv("AWS_REGION")),
+		config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(
+				os.Getenv("AWS_ACCESS_KEY"),
+				os.Getenv("AWS_SECRET_KEY"),
+				"",
+			),
+		),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	client := bedrockruntime.NewFromConfig(cfg)
+
+	// Append user prompt
+	messages = append(messages, map[string]string{
+		"role":    "user",
+		"content": prompt,
+	})
+
+	// Create payload
+	payload := map[string]interface{}{
+		"messages": messages,
+	}
+
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	// Invoke Bedrock model
+	resp, err := client.InvokeModel(ctx, &bedrockruntime.InvokeModelInput{
+		ModelId:     aws.String("mistral.mistral-large-2407-v1:0"),
+		ContentType: aws.String("application/json"),
+		Accept:      aws.String("application/json"),
+		Body:        bytes.NewReader(bodyBytes),
+	})
+	if err != nil {
+		return "", err
+	}
+
+	// Parse response
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+
+	if len(result.Choices) == 0 {
+		return "No response generated.", nil
+	}
+
+	return result.Choices[0].Message.Content, nil
 }

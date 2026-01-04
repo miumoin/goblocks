@@ -837,6 +837,15 @@ func (ac *ApiController) GetTasks(c *gin.Context) {
 		workspace, err := databaseManager.GetBlock(userID, "workspace", 0, slug, 0)
 		if workspace != nil && err == nil {
 
+			//get all the threads under this workspace
+			//prepare a prompt
+			//User commanded: "Something"
+			//Here are available APIs:
+			//[id#1]: node description
+			//[id#2]: node description
+			//Based on the user command and available APIs, create a list of tasks to achieve the goal.
+			//Respond in JSON format with the following structure:[id#1, id#2	, ...]
+
 			// Dummy tasks for demonstration purposes
 			tasks := []map[string]interface{}{
 				{
@@ -867,7 +876,7 @@ func (ac *ApiController) GetTasks(c *gin.Context) {
 						},
 						"body": map[string]string{
 							"status":     "processing",
-							"updated_at": "2024-01-01T00:00:00Z",
+							"updated_at": "{current_time}",
 						},
 					},
 					"outputs": map[string]interface{}{},
@@ -881,11 +890,11 @@ func (ac *ApiController) GetTasks(c *gin.Context) {
 						"method":   "POST",
 						"headers": map[string]string{
 							"Content-Type":  "application/json",
-							"Authorization": "Bearer token123",
+							"Authorization": "Bearer {token}",
 						},
 						"body": map[string]string{
 							"message": "Task completed successfully",
-							"user_id": "user_123",
+							"user_id": "{user_id}",
 						},
 					},
 					"outputs": map[string]interface{}{},

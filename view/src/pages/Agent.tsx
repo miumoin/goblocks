@@ -68,30 +68,23 @@ const Agent: React.FC = () => {
         if (data.tasks.length > 0) {
             (async () => {
                 for ( var i=0; i<data.tasks.length; i++ ) {
-                    if (data.tasks[i].status === 0) {
-                        data.tasks[i].status = 1; //mark as in-progress
+                    var tasks = data.tasks;
+                    if( data.tasks[i].status === 0 ) {
+                        fakeSleep(2000);
+                        tasks[i].status = 1; //mark as input ready
                         setData((prevData) => ({ ...prevData, tasks: data.tasks }));
-                        await fakeSleep(3000);
-                        
-                        data.tasks[i].status = 2; //mark as input ready
-                        setData((prevData) => ({ ...prevData, tasks: data.tasks }));
-                        await fakeSleep(3000);
-
-                        data.tasks[i].status = 3; //mark as completed
-                        setData((prevData) => ({ ...prevData, tasks: data.tasks }));
-                        await fakeSleep(3000);
+                        break; //execute one node at a time
+                    } else if( data.tasks[i].status === 1 ) {
+                        await prepareNode(i);
+                        break; //execute one node at a time
+                    } else if( data.tasks[i].status === 2 ) {
+                        await executeNode(i);
+                        break; //execute one node at a time
                     }
                 }
-                setData((prevData) => ({ ...prevData, tasks: data.tasks }));
             })();
         }
-    }, [data.tasks]);
-
-    const dispatchInference = async (): Promise<void> => {
-        //if(data.isKnowledgeReady && ( data.messages.length > 0 && parseInt( data.messages[ data.messages.length - 1 ]['author'] ) < 0 && data.messages[ data.messages.length - 1 ]['generated_response'] == undefined )) {
-            //requestInference( data.messages[ data.messages.length - 1 ]['id'] );
-        //}
-    };
+    }, [JSON.stringify(data.tasks)]);
 
     const prepareAgent = async ( slug: string|undefined ) : Promise<void> => {
         const response = await fetch(App.api_base + '/agent/' + data.slug + '/init', {
@@ -125,7 +118,7 @@ const Agent: React.FC = () => {
     * Make inference calls to identify inputs for next nodes from outputs of previous nodes
     * Continue until all nodes are processed or breaks somewhere
     */
-    const sendMessage = async (e: React.FormEvent) : Promise<void> => {
+    const commandAgent = async (e: React.FormEvent) : Promise<void> => {
         e.preventDefault();
         if( data.message.trim() == '' ) setData((prevData) => ({ ...prevData, isMessageValid: false }));
         else {
@@ -158,6 +151,119 @@ const Agent: React.FC = () => {
         }
     };
 
+    const prepareNode = async (nodeIndex: number): Promise<void> => {
+        console.log( 'Preparing node index: ', nodeIndex );
+        console.log( data.tasks[nodeIndex] );
+        const tasks = data.tasks;
+        let intelligenceRequired = false;
+        let prompt = '';
+        
+        if( tasks[nodeIndex].node.headers != undefined && Object.keys(tasks[nodeIndex].node.headers).length > 0 ) {
+            Object.entries(tasks[nodeIndex].node.headers).forEach(([key, value]) => {
+                if (typeof value === 'string' && value.includes('{') && value.includes('}')) {
+                    // Handle dynamic header value
+                    intelligenceRequired = true;
+                }
+            });
+        }
+
+        if( intelligenceRequired == false && tasks[nodeIndex].node.body != undefined && Array.isArray(tasks[nodeIndex].node.body) && tasks[nodeIndex].node.method != 'GET' ) {
+            Object.entries(tasks[nodeIndex].node.body).forEach(([key, value]) => {
+                if (typeof value === 'string' && value.includes('{') && value.includes('}')) {
+                    // Handle dynamic header value
+                    intelligenceRequired = true;
+                }
+            });
+        }
+
+        tasks[nodeIndex].status = 2; //mark as ready to execute
+        await fakeSleep(2000);
+        setData((prevData) => ({ ...prevData, tasks: tasks }));
+
+        if (intelligenceRequired) {
+            const previousTaskOutput = nodeIndex > 0 ? JSON.stringify(data.tasks[nodeIndex - 1].outputs) : '';
+            let previousOutputs = '';
+            for (let i = 0; i < nodeIndex; i++) {
+                if (tasks[i].status === 3) {
+                    previousOutputs += `Task ${i + 1}: ${tasks[i].description}`;
+                    previousOutputs += `output: ${JSON.stringify(tasks[i].outputs)}\n`;
+                }
+            }
+            
+            const prompt = `User commanded: ${data.message}
+            
+    Task ${nodeIndex + 1}: ${tasks[nodeIndex].description}
+    Previous task outputs:
+    ${previousOutputs}
+
+    Now, from the user's command and previous outputs, decide and replace variable body and header inputs for following task. Variable body and header inputs are enclosed in curly braces {}. Return exactly the updated headers and body in JSON format only. For example, if header has "Authorization": "{auth_token}", replace it with actual token value. Do not change any other static values. If no changes are needed, return the original headers and body as is. Respond only with JSON object containing updated headers and body, i.e. { "headers": { ... }, "body": { ... } }.
+    
+    Node details:
+    Endpoint: ${tasks[nodeIndex].node.endpoint}
+    Method: ${tasks[nodeIndex].node.method}
+    Headers: ${JSON.stringify(tasks[nodeIndex].node.headers)}
+    Body: ${JSON.stringify(tasks[nodeIndex].node.body)}
+    `;
+
+            // Make inference call to prepare inputs
+            const response = await fetch(App.api_base + '/agent/' + data.slug + '/prepare', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Vuedoo-Domain': App.domain,
+                    'X-Vuedoo-Access-Key': data.accessKey
+                },
+                body: JSON.stringify({ prompt })
+            });
+
+            if (response.ok) {
+                const res = await response.json();
+                if (res.status === 'success') {
+                    //tasks[nodeIndex].node = res.node;
+                    //setData((prevData) => ({ ...prevData, tasks: tasks }));
+                }
+            }
+        }
+    };
+
+    const executeNode = async (nodeIndex: number): Promise<void> => {
+        console.log( 'Executing node index: ', nodeIndex );
+        console.log( data.tasks[nodeIndex] );
+        const tasks = data.tasks;
+        tasks[nodeIndex].status = 3; //mark as ready to execute
+        await fakeSleep(2000);
+        setData((prevData) => ({ ...prevData, tasks: tasks }));
+        
+
+        //Replace
+        // User commanded {user command}, following task has been performed:
+        //Iteration {n}
+            // Task: {task description}
+            // Output from previous task: {previous task output}
+        // Now, prepare the required inputs (headers/body) for the next task node if any.
+
+        /*const response = await fetch(App.api_base + '/agent/' + data.slug + '/gettasks', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Vuedoo-Domain': App.domain,
+                'X-Vuedoo-Access-Key': ''
+            },
+            body: JSON.stringify({ message: data.message, nodeIndex })
+        });
+
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+
+        const res = await response.json();
+
+        if (res.status === 'success') {
+            // get task list and start inferencing for the specified nodeIndex if needed
+            setData((prevData) => ({ ...prevData, tasks: res.tasks }));
+        }*/
+    };
+
     // Auto-expand function
     const autoExpand = () => {
         const textarea = textareaRef.current;
@@ -187,7 +293,7 @@ const Agent: React.FC = () => {
                                 display: 'flex',
                                 alignItems: 'flex-end'
                             }}>
-                                <form onSubmit={sendMessage} id="chatBox" className="w-100">
+                                <form onSubmit={commandAgent} id="chatBox" className="w-100">
                                     <div className="position-relative">
                                         {/* Button in the top-right */}
                                         <span className="position-absolute top-0 end-0">
@@ -214,7 +320,7 @@ const Agent: React.FC = () => {
                                                     e.preventDefault();
                                                     if (data.isMessageValid && data.tasks.length == 0) {
                                                         // cast keyboard event to form event for sendMessage
-                                                        sendMessage(e as unknown as React.FormEvent);
+                                                        commandAgent(e as unknown as React.FormEvent);
                                                     }
                                                 }
                                             }}
