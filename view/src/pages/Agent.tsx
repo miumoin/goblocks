@@ -168,17 +168,19 @@ const Agent: React.FC = () => {
         }
 
         if( intelligenceRequired == false && tasks[nodeIndex].node.body != undefined && Array.isArray(tasks[nodeIndex].node.body) && tasks[nodeIndex].node.method != 'GET' ) {
-            Object.entries(tasks[nodeIndex].node.body).forEach(([key, value]) => {
-                if (typeof value === 'string' && value.includes('{') && value.includes('}')) {
+            Object.entries(tasks[nodeIndex].node.body).forEach(([index, entry]) => {
+                if (typeof entry.value === 'string' && entry.value.includes('{') && entry.value.includes('}')) {
                     // Handle dynamic header value
                     intelligenceRequired = true;
                 }
             });
         }
 
-        tasks[nodeIndex].status = 2; //mark as ready to execute
-        await fakeSleep(2000);
-        setData((prevData) => ({ ...prevData, tasks: tasks }));
+        console.log( 'Intelligence required: ', intelligenceRequired );
+
+        //tasks[nodeIndex].status = 2; //mark as ready to execute
+        //await fakeSleep(2000);
+        //setData((prevData) => ({ ...prevData, tasks: tasks }));
 
         if (intelligenceRequired) {
             const previousTaskOutput = nodeIndex > 0 ? JSON.stringify(data.tasks[nodeIndex - 1].outputs) : '';
@@ -191,19 +193,23 @@ const Agent: React.FC = () => {
             }
             
             const prompt = `User commanded: ${data.message}
+
+            ${previousOutputs != '' ? `
+API ${nodeIndex + 1}: ${tasks[nodeIndex].description}
+Previous API outputs:
+${previousOutputs}
+` : ``}
             
-    Task ${nodeIndex + 1}: ${tasks[nodeIndex].description}
-    Previous task outputs:
+    API ${nodeIndex + 1}: ${tasks[nodeIndex].description}
+    Previous API outputs:
     ${previousOutputs}
 
     Now, from the user's command and previous outputs, decide and replace variable body and header inputs for following task. Variable body and header inputs are enclosed in curly braces {}. Return exactly the updated headers and body in JSON format only. For example, if header has "Authorization": "{auth_token}", replace it with actual token value. Do not change any other static values. If no changes are needed, return the original headers and body as is. Respond only with JSON object containing updated headers and body, i.e. { "headers": { ... }, "body": { ... } }.
     
-    Node details:
-    Endpoint: ${tasks[nodeIndex].node.endpoint}
-    Method: ${tasks[nodeIndex].node.method}
     Headers: ${JSON.stringify(tasks[nodeIndex].node.headers)}
     Body: ${JSON.stringify(tasks[nodeIndex].node.body)}
     `;
+            console.log( 'Preparation prompt: ', prompt );
 
             // Make inference call to prepare inputs
             const response = await fetch(App.api_base + '/agent/' + data.slug + '/prepare', {
@@ -213,12 +219,13 @@ const Agent: React.FC = () => {
                     'X-Vuedoo-Domain': App.domain,
                     'X-Vuedoo-Access-Key': data.accessKey
                 },
-                body: JSON.stringify({ prompt })
+                body: JSON.stringify({ prompt: prompt })
             });
 
             if (response.ok) {
                 const res = await response.json();
                 if (res.status === 'success') {
+                    console.log( res );
                     //tasks[nodeIndex].node = res.node;
                     //setData((prevData) => ({ ...prevData, tasks: tasks }));
                 }
@@ -233,7 +240,6 @@ const Agent: React.FC = () => {
         tasks[nodeIndex].status = 3; //mark as ready to execute
         await fakeSleep(2000);
         setData((prevData) => ({ ...prevData, tasks: tasks }));
-        
 
         //Replace
         // User commanded {user command}, following task has been performed:

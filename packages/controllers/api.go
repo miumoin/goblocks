@@ -45,6 +45,7 @@ func (ac *ApiController) RegisterApiRoutes() {
 		apiGroup.POST("/workspace/:slug/thread/:threadSlug/execute", ac.ExecuteThread)
 		apiGroup.GET("/agent/:slug/init", ac.InitAgent)
 		apiGroup.POST("/agent/:slug/gettasks", ac.GetTasks)
+		apiGroup.POST("/agent/:slug/prepare", ac.PrepareTask)
 		apiGroup.GET("/welcome", ac.ApiWelcome)
 	}
 }
@@ -812,6 +813,26 @@ func (ac *ApiController) GetTasks(c *gin.Context) {
 	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
 	slug := c.Param("slug")
 
+	var content struct {
+		Message string `json:"message"`
+	}
+
+	if err := c.BindJSON(&content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail"})
+		return
+	}
+
+	/*utils := services.NewUtilities(ac.db)
+	response, err := utils.GenerateBedrockText("Hello from Bedrock!", []map[string]string{})
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+			"error":  err.Error(),
+		})
+		return
+	}
+	fmt.Println("Bedrock response:", response)*/
+
 	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
 	if dErr != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -823,83 +844,114 @@ func (ac *ApiController) GetTasks(c *gin.Context) {
 
 	var workspaceID int64
 	var userID int64
-	err := ac.db.QueryRow("SELECT id, author FROM blocks WHERE slug = ?", slug).Scan(&workspaceID, &userID)
-	if err != nil {
+	userErr := ac.db.QueryRow("SELECT id, author FROM blocks WHERE slug = ?", slug).Scan(&workspaceID, &userID)
+	if userErr != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"status":    "fail",
 			"workspace": nil,
 			"threads":   nil,
 		})
 		return
+	} else {
+		fmt.Println("Workspace ID:", workspaceID, "User ID:", userID)
 	}
 
 	if slug != "" {
 		workspace, err := databaseManager.GetBlock(userID, "workspace", 0, slug, 0)
 		if workspace != nil && err == nil {
+			workspaceID = workspace["id"].(int64)
 
-			//get all the threads under this workspace
-			//prepare a prompt
-			//User commanded: "Something"
-			//Here are available APIs:
-			//[id#1]: node description
-			//[id#2]: node description
-			//Based on the user command and available APIs, create a list of tasks to achieve the goal.
-			//Respond in JSON format with the following structure:[id#1, id#2	, ...]
-
-			// Dummy tasks for demonstration purposes
-			tasks := []map[string]interface{}{
-				{
-					"id":          1,
-					"description": "Fetch resources from the API and prepare them for processing.",
-					"status":      0,
-					"node": map[string]interface{}{
-						"endpoint": "https://api.example.com/v1/resource",
-						"method":   "GET",
-						"headers": map[string]string{
-							"Content-Type":  "application/json",
-							"Authorization": "Bearer token123",
-						},
-						"body": map[string]string{},
-					},
-					"outputs": map[string]interface{}{},
-				},
-				{
-					"id":          2,
-					"description": "Update the resource status to processing.",
-					"status":      0,
-					"node": map[string]interface{}{
-						"endpoint": "https://api.example.com/v1/resource/123",
-						"method":   "POST",
-						"headers": map[string]string{
-							"Content-Type":  "application/json",
-							"Authorization": "Bearer token123",
-						},
-						"body": map[string]string{
-							"status":     "processing",
-							"updated_at": "{current_time}",
-						},
-					},
-					"outputs": map[string]interface{}{},
-				},
-				{
-					"id":          3,
-					"description": "Send a notification that the task has completed.",
-					"status":      0,
-					"node": map[string]interface{}{
-						"endpoint": "https://api.example.com/v1/notify",
-						"method":   "POST",
-						"headers": map[string]string{
-							"Content-Type":  "application/json",
-							"Authorization": "Bearer {token}",
-						},
-						"body": map[string]string{
-							"message": "Task completed successfully",
-							"user_id": "{user_id}",
-						},
-					},
-					"outputs": map[string]interface{}{},
-				},
+			threads, tErr := databaseManager.GetBlocks(userID, "thread", 1, 100, workspaceID)
+			if tErr != nil {
+				threads = []map[string]interface{}{}
 			}
+			//fmt.Println("Threads under workspace:", threads)
+
+			var prompt string
+
+			// Get all the threads under this workspace and prepare a prompt
+			prompt = fmt.Sprintf("User commanded: %s\n\nHere are available APIs:\n", content.Message)
+
+			for _, thread := range threads {
+				if threadContent, ok := thread["content"]; ok {
+					var threadData map[string]interface{}
+					json.Unmarshal([]byte(threadContent.(string)), &threadData)
+					if description, ok := threadData["description"].(string); ok {
+						prompt += fmt.Sprintf("[%v]: %s\n", thread["id"], description)
+					}
+				}
+			}
+
+			prompt += "\nBased on the user command and available APIs, create a list of tasks to achieve the goal.\nRespond in JSON format of single dimensional array of API IDs in order: [id1, id2, ...]"
+
+			fmt.Println("Generated prompt:", prompt)
+
+			/*
+				utils := services.NewUtilities(ac.db)
+				response, err := utils.GenerateBedrockText(prompt, []map[string]string{})
+				if err != nil {
+					c.JSON(http.StatusOK, gin.H{
+						"status": "fail",
+						"error":  err.Error(),
+					})
+					return
+				}
+				fmt.Println("Bedrock response:", response)
+
+				var apiIDs []int64
+				// strip markdown code fences like ```json ... ``` or ``` ... ```
+				cleanResp := strings.TrimSpace(response)
+				if strings.HasPrefix(cleanResp, "```json") {
+					cleanResp = strings.TrimPrefix(cleanResp, "```json")
+				} else if strings.HasPrefix(cleanResp, "```") {
+					cleanResp = strings.TrimPrefix(cleanResp, "```")
+				}
+				cleanResp = strings.TrimSuffix(cleanResp, "```")
+				cleanResp = strings.TrimSpace(cleanResp)
+
+				jsonErr := json.Unmarshal([]byte(cleanResp), &apiIDs)
+				if jsonErr != nil {
+					c.JSON(http.StatusOK, gin.H{
+						"status": "fail",
+						"error":  "Failed to parse Bedrock response",
+					})
+					return
+				}
+
+				var tasks []map[string]interface{}
+				for _, apiID := range apiIDs {
+					for _, thread := range threads {
+						if thread["id"] == apiID {
+							if threadContent, ok := thread["content"]; ok {
+								var threadData map[string]interface{}
+								json.Unmarshal([]byte(threadContent.(string)), &threadData)
+								if desc, ok := threadData["description"]; ok {
+									task := map[string]interface{}{
+										"id":          apiID,
+										"description": desc,
+										"status":      0,
+										"node": map[string]interface{}{
+											"endpoint": threadData["endpoint"],
+											"method":   threadData["type"],
+											"headers":  threadData["headers"],
+											"body":     threadData["body"],
+										},
+										"outputs": map[string]interface{}{},
+									}
+									tasks = append(tasks, task)
+								}
+							}
+							break
+						}
+					}
+				}
+
+				fmt.Println("Built tasks:", tasks)
+			*/
+
+			taskstring := "[{\"description\":\"Find the email address from a given name.\",\"id\":14,\"node\":{\"body\":[{\"key\":\"Name\",\"value\":\"{name of the person}\"},{\"key\":\"Company\",\"value\":\"{company he works at}\"}],\"endpoint\":\"https://api.example.com/find_email\",\"headers\":[{\"key\":\"Token\",\"value\":\"Bearer 123\"}],\"method\":\"POST\"},\"outputs\":{},\"status\":0},{\"description\":\"Create a meeting schedule on Calendly with a given time and date.\",\"id\":12,\"node\":{\"body\":[{\"key\":\"Name\",\"value\":\"{name of the person}\"},{\"key\":\"Email\",\"value\":\"{email of the person}\"},{\"key\":\"Date\",\"value\":\"{date of meeting}\"},{\"key\":\"Time\",\"value\":\"{time of meeting}\"}],\"endpoint\":\"https://api.calendly.com/users/me\",\"headers\":[{\"key\":\"Authorization\",\"value\":\"Bearer eyJraWQiOiIxY2UxZTEzNjE3ZGNmNzY2YjNjZWJjY2Y4ZGM1YmFmYThhNjVlNjg0MDIzZjdjMzJiZTgzNDliMjM4MDEzNWI0IiwidHlwIjoiUEFUIiwiYWxnIjoiRVMyNTYifQ.eyJpc3MiOiJodHRwczovL2F1dGguY2FsZW5kbHkuY29tIiwiaWF0IjoxNzY2ODYwOTM3LCJqdGkiOiJmNWUzNmRiMy0wNTE1LTQyZWMtOGMwZC01MWYyM2FmNjFkMDEiLCJ1c2VyX3V1aWQiOiI3OTNiZGQxYy01MDgyLTRlYzYtOGY3MS04NGI0NzQ3MDViZDcifQ.GAclkZpQg0jEjfKvW5cO1mXaFMjoD0pSUXZ3AZu3EzizfmUkBuTc13wiptpV-DsmzCsBU-ayGTLelyhazNgc3Q\"}],\"method\":\"POST\"},\"outputs\":{},\"status\":0},{\"description\":\"Send invited an email confirmation of a meeting schedule.\",\"id\":15,\"node\":{\"body\":[{\"key\":\"Email\",\"value\":\"{email of the user}\"},{\"key\":\"Text\",\"value\":\"Your meeting has been confirmed.\"}],\"endpoint\":\"https://api.example.com/send_confirm\",\"headers\":[{\"key\":\"Token\",\"value\":\"Bearer 123\"}],\"method\":\"POST\"},\"outputs\":{},\"status\":0}]"
+			var tasks []map[string]interface{}
+			json.Unmarshal([]byte(taskstring), &tasks)
 
 			c.JSON(http.StatusOK, gin.H{
 				"status":    "success",
@@ -913,6 +965,43 @@ func (ac *ApiController) GetTasks(c *gin.Context) {
 				"tasks":     []map[string]interface{}{},
 			})
 		}
+	}
+}
+
+func (ac *ApiController) PrepareTask(c *gin.Context) {
+	//domain := c.GetHeader("X-Vuedoo-Domain")
+	//accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+	//slug := c.Param("slug")
+
+	var content struct {
+		Prompt string `json:"prompt"`
+	}
+
+	if err := c.BindJSON(&content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail"})
+		return
+	}
+
+	if content.Prompt != "" {
+		utils := services.NewUtilities(ac.db)
+		response, err := utils.GenerateBedrockText("Hello from Bedrock!", []map[string]string{})
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"status": "fail",
+				"error":  err.Error(),
+			})
+			return
+		}
+		fmt.Println("Bedrock response:", response)
+		c.JSON(http.StatusOK, gin.H{
+			"status":   "success",
+			"response": response,
+		})
+		return
+	} else {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+		})
 	}
 }
 

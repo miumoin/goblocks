@@ -562,7 +562,7 @@ func (u *Utilities) ExecuteApi(Endpoint string, ApiType string, Headers []map[st
 }
 
 // write a function that makes an inference with a prompt
-func GenerateBedrockText(prompt string, messages []map[string]string) (string, error) {
+func (u *Utilities) GenerateBedrockText(prompt string, messages []map[string]string) (string, error) {
 	ctx := context.Background()
 
 	// Load AWS config
@@ -603,7 +603,7 @@ func GenerateBedrockText(prompt string, messages []map[string]string) (string, e
 		ModelId:     aws.String("mistral.mistral-large-2407-v1:0"),
 		ContentType: aws.String("application/json"),
 		Accept:      aws.String("application/json"),
-		Body:        bytes.NewReader(bodyBytes),
+		Body:        bodyBytes,
 	})
 	if err != nil {
 		return "", err
@@ -618,7 +618,8 @@ func GenerateBedrockText(prompt string, messages []map[string]string) (string, e
 		} `json:"choices"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	// resp.Body is a []byte from the SDK; wrap it with a reader for json.Decoder
+	if err := json.NewDecoder(bytes.NewReader(resp.Body)).Decode(&result); err != nil {
 		return "", err
 	}
 
