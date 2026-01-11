@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/miumoin/agencybot/packages/services"
@@ -46,6 +47,7 @@ func (ac *ApiController) RegisterApiRoutes() {
 		apiGroup.GET("/agent/:slug/init", ac.InitAgent)
 		apiGroup.POST("/agent/:slug/gettasks", ac.GetTasks)
 		apiGroup.POST("/agent/:slug/prepare", ac.PrepareTask)
+		apiGroup.POST("/agent/:slug/execute", ac.ExecuteTask)
 		apiGroup.GET("/welcome", ac.ApiWelcome)
 	}
 }
@@ -969,9 +971,10 @@ func (ac *ApiController) GetTasks(c *gin.Context) {
 }
 
 func (ac *ApiController) PrepareTask(c *gin.Context) {
-	//domain := c.GetHeader("X-Vuedoo-Domain")
-	//accessKey := c.GetHeader("X-Vuedoo-Access-Key")
-	//slug := c.Param("slug")
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+	slug := c.Param("slug")
+	fmt.Println("Ignored slug:", slug, "domain:", domain, "accessKey:", accessKey)
 
 	var content struct {
 		Prompt string `json:"prompt"`
@@ -984,7 +987,7 @@ func (ac *ApiController) PrepareTask(c *gin.Context) {
 
 	if content.Prompt != "" {
 		utils := services.NewUtilities(ac.db)
-		response, err := utils.GenerateBedrockText("Hello from Bedrock!", []map[string]string{})
+		response, err := utils.GenerateBedrockText(content.Prompt, []map[string]string{})
 		if err != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"status": "fail",
@@ -992,10 +995,30 @@ func (ac *ApiController) PrepareTask(c *gin.Context) {
 			})
 			return
 		}
-		fmt.Println("Bedrock response:", response)
+
+		// strip markdown code fences like ```json ... ``` or ``` ... ```
+		cleanResp := strings.TrimSpace(response)
+		if strings.HasPrefix(cleanResp, "```json") {
+			cleanResp = strings.TrimPrefix(cleanResp, "```json")
+		} else if strings.HasPrefix(cleanResp, "```") {
+			cleanResp = strings.TrimPrefix(cleanResp, "```")
+		}
+		cleanResp = strings.TrimSuffix(cleanResp, "```")
+		cleanResp = strings.TrimSpace(cleanResp)
+
+		var jsonResponse map[string]interface{}
+		jsonErr := json.Unmarshal([]byte(cleanResp), &jsonResponse)
+		if jsonErr != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"status": "fail",
+				"error":  "Failed to parse Bedrock response",
+			})
+			return
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"status":   "success",
-			"response": response,
+			"response": jsonResponse,
 		})
 		return
 	} else {
@@ -1003,6 +1026,32 @@ func (ac *ApiController) PrepareTask(c *gin.Context) {
 			"status": "fail",
 		})
 	}
+}
+
+func (ac *ApiController) ExecuteTask(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+	slug := c.Param("slug")
+	fmt.Println("Ignored slug:", slug, "domain:", domain, "accessKey:", accessKey)
+
+	var content struct {
+		Task string `json:"task"`
+	}
+
+	if err := c.BindJSON(&content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"outputs": map[string]interface{}{
+			"result":      "Task executed successfully",
+			"Email":       "Ashik.Chowdhury@citybanik.com",
+			"Meeting":     "2023-10-01T10:00:00Z",
+			"MeetingLink": "https://calendly.com/ashik-chowdhury/meeting",
+		},
+	})
 }
 
 /*

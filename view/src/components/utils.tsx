@@ -88,21 +88,34 @@ export const getInitials = (text:string) => {
 interface CurlGeneratorProps {
     endpoint: string;
     method?: string;
-    headers?: Record<string, string>;
+    headers?: any;
     body?: any;
 }
 
 export const generateCurl = (props: CurlGeneratorProps): string => {
-    const { endpoint, method = "GET", headers = {}, body = null } = props;
+    const { endpoint, method = "GET", headers = null, body = null } = props;
+    console.log(props);
     
     let curl = [`curl -X ${method.toUpperCase()}`];
 
-    for (const [key, value] of Object.entries(headers)) {
-        curl.push(`-H "${key}: ${value}"`);
+    if (Array.isArray(headers)) {
+        for (const { key, value } of headers) {
+            if (key && value !== undefined) {
+            curl.push(`-H "${key}: ${value}"`);
+            }
+        }
     }
 
-    if (body && method.toUpperCase() !== "GET") {
-        const jsonBody = typeof body === "string" ? body : JSON.stringify(body);
+    if (Array.isArray(body) && method.toUpperCase() !== "GET") {
+        const data: Record<string, unknown> = {};
+
+        for (const { key, value } of body) {
+            if (key && value !== undefined) {
+                data[key] = value;
+            }
+        }
+
+        const jsonBody = JSON.stringify(data);
         curl.push(`--data '${jsonBody.replace(/'/g, `'\\''`)}'`);
     }
 

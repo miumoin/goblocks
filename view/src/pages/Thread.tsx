@@ -201,9 +201,7 @@ const Thread: React.FC = () => {
                                                 body: data.body
                                             };
 
-                                            const headersObj = content.headers.reduce((acc: Record<string, string>, h) => { if (h.key) acc[h.key] = h.value; return acc; }, {});
-                                            const bodyObj = content.body.reduce((acc: Record<string, string>, b) => { if (b.key) acc[b.key] = b.value; return acc; }, {});
-                                            document.getElementById('command-text')!.textContent = generateCurl({endpoint: content.endpoint, method: content.type, headers: headersObj, body: bodyObj});
+                                            document.getElementById('command-text')!.textContent = generateCurl({endpoint: content.endpoint, method: content.type, headers: content.headers, body: content.body});
                                             document.getElementById('test-endpoint-btn')?.classList.add('disabled'); 
                                             const response = await fetch(App.api_base + '/workspace/' + data.slug + '/thread/' + data.threadSlug + '/execute', {
                                                 method: 'POST',

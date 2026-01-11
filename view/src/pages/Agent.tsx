@@ -178,10 +178,6 @@ const Agent: React.FC = () => {
 
         console.log( 'Intelligence required: ', intelligenceRequired );
 
-        //tasks[nodeIndex].status = 2; //mark as ready to execute
-        //await fakeSleep(2000);
-        //setData((prevData) => ({ ...prevData, tasks: tasks }));
-
         if (intelligenceRequired) {
             const previousTaskOutput = nodeIndex > 0 ? JSON.stringify(data.tasks[nodeIndex - 1].outputs) : '';
             let previousOutputs = '';
@@ -226,36 +222,47 @@ ${previousOutputs}
                 const res = await response.json();
                 if (res.status === 'success') {
                     console.log( res );
+                    if( res.response.headers != undefined ) {
+                        for( const [key, value] of Object.entries(res.response.headers) ) {
+                            if( tasks[nodeIndex].node.headers[key] != res.response.headers[key] ) {
+                                tasks[nodeIndex].node.headers[key] = res.response.headers[key];
+                            }
+                        }
+                    }
+
+                    if( res.response.body != undefined ) {
+                        for( const [key, value] of Object.entries(res.response.body) ) {
+                            if( tasks[nodeIndex].node.body[key] != res.response.body[key] ) {
+                                tasks[nodeIndex].node.body[key] = res.response.body[key];
+                            }
+                        }
+                    }
+                    tasks[nodeIndex].node.headers
                     //tasks[nodeIndex].node = res.node;
                     //setData((prevData) => ({ ...prevData, tasks: tasks }));
+                    tasks[nodeIndex].status = 2; //mark as ready to execute
+                    setData((prevData) => ({ ...prevData, tasks: tasks }));
                 }
             }
+        } else {
+            tasks[nodeIndex].status = 2; //mark as ready to execute
+            await fakeSleep(500);
+            setData((prevData) => ({ ...prevData, tasks: tasks }));
         }
     };
 
     const executeNode = async (nodeIndex: number): Promise<void> => {
         console.log( 'Executing node index: ', nodeIndex );
-        console.log( data.tasks[nodeIndex] );
         const tasks = data.tasks;
-        tasks[nodeIndex].status = 3; //mark as ready to execute
-        await fakeSleep(2000);
-        setData((prevData) => ({ ...prevData, tasks: tasks }));
 
-        //Replace
-        // User commanded {user command}, following task has been performed:
-        //Iteration {n}
-            // Task: {task description}
-            // Output from previous task: {previous task output}
-        // Now, prepare the required inputs (headers/body) for the next task node if any.
-
-        /*const response = await fetch(App.api_base + '/agent/' + data.slug + '/gettasks', {
+        const response = await fetch(App.api_base + '/agent/' + data.slug + '/execute', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Vuedoo-Domain': App.domain,
                 'X-Vuedoo-Access-Key': ''
             },
-            body: JSON.stringify({ message: data.message, nodeIndex })
+            body: JSON.stringify(tasks[nodeIndex].node)
         });
 
         if (!response.ok) {
@@ -265,9 +272,11 @@ ${previousOutputs}
         const res = await response.json();
 
         if (res.status === 'success') {
-            // get task list and start inferencing for the specified nodeIndex if needed
-            setData((prevData) => ({ ...prevData, tasks: res.tasks }));
-        }*/
+            console.log(res.outputs);
+            tasks[nodeIndex].status = 3; //mark as executed
+            tasks[nodeIndex].outputs = res.outputs;
+            setData((prevData) => ({ ...prevData, tasks: tasks }));
+        }
     };
 
     // Auto-expand function
@@ -357,7 +366,7 @@ ${previousOutputs}
                                             { task.status === 3 && 
                                                 <div style={{ display: 'flex', alignItems: 'center', overflowX: 'auto', marginTop: '10px' }}>
                                                     <span style={{ marginRight: 8, position: 'sticky', top: 0, alignSelf: 'flex-start', zIndex: 2 }}>$</span>
-                                                    <pre style={{ flexGrow: 1 }}>{ JSON.stringify(task.outputs) }</pre>
+                                                    <pre style={{ flexGrow: 1 }}>{JSON.stringify(task.outputs, null, 2)}</pre>
                                                 </div>
                                             }
                                         </div>
