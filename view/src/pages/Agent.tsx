@@ -196,14 +196,14 @@ Previous API outputs:
 ${previousOutputs}
 ` : ``}
             
-    API ${nodeIndex + 1}: ${tasks[nodeIndex].description}
-    Previous API outputs:
-    ${previousOutputs}
+API ${nodeIndex + 1}: ${tasks[nodeIndex].description}
+Previous API outputs:
+${previousOutputs}
 
-    Now, from the user's command and previous outputs, decide and replace variable body and header inputs for following task. Variable body and header inputs are enclosed in curly braces {}. Return exactly the updated headers and body in JSON format only. For example, if header has "Authorization": "{auth_token}", replace it with actual token value. Do not change any other static values. If no changes are needed, return the original headers and body as is. Respond only with JSON object containing updated headers and body, i.e. { "headers": { ... }, "body": { ... } }.
-    
-    Headers: ${JSON.stringify(tasks[nodeIndex].node.headers)}
-    Body: ${JSON.stringify(tasks[nodeIndex].node.body)}
+Now, from the user's command and previous outputs, decide and replace variable body and header inputs for following task. Variable body and header inputs are enclosed in curly braces {}. Return exactly the updated headers and body in JSON format only. For example, if header has "Authorization": "{auth_token}", replace it with actual token value. Do not change any other static values. If no changes are needed, return the original headers and body as is. Respond only with JSON object containing updated headers and body, i.e. { "headers": { ... }, "body": { ... } }.
+
+Headers: ${JSON.stringify(tasks[nodeIndex].node.headers)}
+Body: ${JSON.stringify(tasks[nodeIndex].node.body)}
     `;
             console.log( 'Preparation prompt: ', prompt );
 
@@ -241,6 +241,8 @@ ${previousOutputs}
                     //tasks[nodeIndex].node = res.node;
                     //setData((prevData) => ({ ...prevData, tasks: tasks }));
                     tasks[nodeIndex].status = 2; //mark as ready to execute
+
+                    console.log( tasks );
                     setData((prevData) => ({ ...prevData, tasks: tasks }));
                 }
             }
@@ -363,7 +365,7 @@ ${previousOutputs}
                                         <div key={index}>
                                             { task.status > 0 && <div style={{ marginTop: '10px' }}>$ <strong>...{task.description}</strong></div> }
                                             { task.status > 1 && <div style={{ marginTop: '10px' }}>$ {generateCurl(task.node)}</div> }
-                                            { task.status === 3 && 
+                                            { task.status > 2 && 
                                                 <div style={{ display: 'flex', alignItems: 'center', overflowX: 'auto', marginTop: '10px' }}>
                                                     <span style={{ marginRight: 8, position: 'sticky', top: 0, alignSelf: 'flex-start', zIndex: 2 }}>$</span>
                                                     <pre style={{ flexGrow: 1 }}>{JSON.stringify(task.outputs, null, 2)}</pre>

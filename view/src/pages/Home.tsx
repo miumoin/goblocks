@@ -315,7 +315,7 @@ const Home: React.FC = () => {
 
                                 <p className="highlight" style={{ fontSize: '1.3rem', fontWeight: 500, textDecoration: 'underline' }}>So we reimagined the idea entirely.</p>
 
-                                <p>nstead of forcing tasks into a fixed workflow, we built a system where the workflow chooses itself.</p>
+                                <p>Instead of forcing tasks into a fixed workflow, we built a system where the workflow chooses itself.</p>
                                 
                                 <p>A platform where agents work more like humans—assessing the task, evaluating options, and selecting the optimal path dynamically.</p>
 
