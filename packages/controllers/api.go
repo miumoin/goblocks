@@ -1068,13 +1068,13 @@ func (ac *ApiController) ExecuteTask(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
-		"outputs": map[string]interface{}{
+		"false_outputs": map[string]interface{}{
 			"result":      "Task executed successfully",
 			"Email":       "Ashik.Chowdhury@citybanik.com",
 			"Meeting":     "2023-10-01T10:00:00Z",
 			"MeetingLink": "https://calendly.com/ashik-chowdhury/meeting",
 		},
-		"real_outputs": execData,
+		"outputs": execData,
 	})
 }
 
