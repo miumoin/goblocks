@@ -44,16 +44,15 @@ func main() {
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With", "X-Vuedoo-Domain", "X-Vuedoo-Access-Key"},
 		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
+		AllowCredentials: false,
 		MaxAge:           12 * time.Hour,
 	}))
 
 	// Initialize services
 	apiController := controllers.NewApiController(db, router)
 	apiController.RegisterApiRoutes()
-	apiController.RegisterHomeRoutes()
 
 	// Start server
 	port := os.Getenv("PORT")

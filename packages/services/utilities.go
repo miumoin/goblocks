@@ -54,18 +54,18 @@ func NewUtilities(db *sql.DB) *Utilities {
 }
 
 // ---- Core Method ----
-func (u *Utilities) MakeLogin(databaseManager DatabaseManager, c *gin.Context) (int64, string, string, error) {
+func (u *Utilities) MakeLogin(databaseManager DatabaseManager, c *gin.Context) (int64, string, string, string, string, error) {
 	req := &Request{c.Request}
 
 	// Parse JSON
 	body, err := req.GetContent()
 	if err != nil {
-		return 0, "", "", err
+		return 0, "", "", "", "", err
 	}
 
 	var content map[string]interface{}
 	if err := json.Unmarshal(body, &content); err != nil {
-		return 0, "", "", err
+		return 0, "", "", "", "", err
 	}
 
 	// Generate password
@@ -77,24 +77,49 @@ func (u *Utilities) MakeLogin(databaseManager DatabaseManager, c *gin.Context) (
 	userID, err := databaseManager.AddUser(email, GetMD5Hash(password))
 
 	if err != nil && userID == 0 {
-		return 0, "", "", err
+		return 0, "", "", "", "", err
 	}
 
 	userEmail := email
 	accessKey := ""
+	name := ""
+	picture := ""
 
 	// If Google login
 	if _, hasAud := content["aud"]; hasAud {
 		if _, hasAzp := content["azp"]; hasAzp {
 			emailAndKey, err := databaseManager.GetAccessKey(userID)
 			if err != nil {
-				return 0, "", "", err
+				return 0, "", "", "", "", err
 			}
 			userEmail, accessKey = emailAndKey[0], emailAndKey[1]
 			if err != nil {
-				return 0, "", "", err
+				return 0, "", "", "", "", err
 			}
-			return userID, userEmail, accessKey, nil
+
+			givenName, ok1 := content["given_name"].(string)
+			familyName, ok2 := content["family_name"].(string)
+			picture, ok3 := content["picture"].(string)
+
+			if ok1 && givenName != "" {
+				name += givenName
+			}
+			if ok2 && familyName != "" {
+				if name != "" {
+					name += " "
+				}
+				name += familyName
+			}
+
+			if name != "" {
+				_ = databaseManager.AddMeta("user", userID, "name", name)
+			}
+
+			if ok3 && picture != "" {
+				_ = databaseManager.AddMeta("user", userID, "picture", picture)
+			}
+
+			return userID, userEmail, accessKey, name, picture, nil
 		}
 	}
 
@@ -106,7 +131,7 @@ func (u *Utilities) MakeLogin(databaseManager DatabaseManager, c *gin.Context) (
 		"code":      password,
 	}
 	if err := databaseManager.AddMeta("user", userID, "validation_key", meta); err != nil {
-		return 0, "", "", err
+		return 0, "", "", "", "", err
 	}
 
 	subject := "Your Login Verification Code"
@@ -132,7 +157,7 @@ The Typewriting Team`, password)
 	// Placeholder for email sending
 	u.SendEmail(userEmail, subject, messagePlain, messageHTML)
 
-	return userID, userEmail, accessKey, nil
+	return userID, userEmail, accessKey, name, picture, nil
 }
 
 func GetMD5Hash(text string) string {

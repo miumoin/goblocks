@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -31,13 +32,17 @@ func (ac *ApiController) RegisterApiRoutes() {
 	{
 		apiGroup.POST("/login", ac.Login)
 		apiGroup.POST("/verify", ac.Verify)
-		apiGroup.GET("/workspaces", ac.GetWorkspaces)
-		apiGroup.GET("/workspaces/:page_no", ac.GetWorkspaces)
-		apiGroup.POST("/workspaces/add", ac.AddNewWorkspace)
-		apiGroup.POST("/workspace/delete", ac.DeleteWorkspace)
-		apiGroup.GET("/workspace/:slug", ac.GetWorkspace)
-		apiGroup.POST("/workspace/:slug/update", ac.UpdateWorkspace)
-		apiGroup.GET("/workspace/:slug/threads/:page", ac.GetThreads)
+		apiGroup.POST("/initWorker", ac.InitWorker)
+		apiGroup.POST("/startProject", ac.StartProject)
+		apiGroup.GET("/activeWorks", ac.GetActiveWorks)
+		/*apiGroup.GET("/projects/:page_no", ac.GetProjects)
+		apiGroup.GET("/history/:page_no", ac.GetWorkHistory)
+		apiGroup.GET("/profile", ac.GetProfile)
+		apiGroup.POST("/terminateWorker", ac.TerminateWorker)
+		apiGroup.GET("/terminateProject", ac.TerminateProject)
+		apiGroup.GET("/getEmployerDues", ac.GetEmployerDues)
+		apiGroup.GET("/getWorkerDues", ac.GetWorkerDues)
+		apiGroup.POST("/completeWorkerDues", ac.CompleteWorkerDues)*/
 		apiGroup.GET("/welcome", ac.ApiWelcome)
 	}
 }
@@ -65,7 +70,7 @@ func (ac *ApiController) Login(c *gin.Context) {
 
 	// Note: DatabaseManager and utilities.makeLogin implementation needed
 	utils := services.NewUtilities(ac.db)
-	userID, userEmail, newAccessKey, err := utils.MakeLogin(*databaseManager, c)
+	userID, userEmail, newAccessKey, name, picture, err := utils.MakeLogin(*databaseManager, c)
 	if err == nil && userEmail != "" {
 		fmt.Println("User logged in: ", userEmail)
 	}
@@ -73,6 +78,9 @@ func (ac *ApiController) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":     map[bool]string{true: "success", false: "fail"}[userID > 0],
 		"access_key": newAccessKey,
+		"user_id":    userID,
+		"name":       name,
+		"picture":    picture,
 	})
 }
 
@@ -373,6 +381,228 @@ func (ac *ApiController) UpdateWorkspace(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
+	})
+}
+
+func (ac *ApiController) InitWorker(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+	var content struct {
+		ScannedId int64 `json:"user_id"`
+	}
+
+	if err := c.BindJSON(&content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail"})
+		return
+	}
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+		})
+		return
+	}
+
+	workerName, _ := databaseManager.GetMeta("user", content.ScannedId, "name")
+	workerPicture, _ := databaseManager.GetMeta("user", content.ScannedId, "picture")
+
+	worker := map[string]interface{}{
+		"id":     content.ScannedId,
+		"name":   workerName,
+		"email":  "", //email not shared
+		"phone":  "", //phone not shared
+		"avatar": workerPicture,
+		"role":   "Worker", //default role
+		"rating": 0.0,      //default rating
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"worker": worker,
+	})
+}
+
+func (ac *ApiController) StartProject(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+
+	var content struct {
+		WorkerId    int64  `json:"user_id"`
+		ProjectName string `json:"project_name"`
+		ProjectId   int64  `json:"project_id"` //optional, for starting existing projects
+	}
+
+	if err := c.BindJSON(&content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail"})
+		return
+	}
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+
+	if content.ProjectId < 1 {
+		projectBlockData := map[string]interface{}{
+			"type":    "project",
+			"title":   content.ProjectName,
+			"content": "",
+			"parent":  0,
+		}
+
+		projectBlock, perr := databaseManager.AddBlock(userID, projectBlockData, "")
+
+		if perr != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"status": "fail",
+				"block":  nil,
+			})
+			return
+		} else {
+			content.ProjectId = projectBlock["id"].(int64)
+		}
+	}
+
+	recruitBlockData := map[string]interface{}{
+		"type":    "recruit",
+		"title":   content.ProjectName,
+		"content": content.WorkerId,
+		"parent":  content.ProjectId,
+	}
+
+	recruitBlock, rerr := databaseManager.AddBlock(userID, recruitBlockData, "")
+
+	if rerr != nil && recruitBlock != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+			"block":  nil,
+		})
+		return
+	}
+
+	// Note: Further implementation needed to actually start a project
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+	})
+}
+
+func (ac *ApiController) GetActiveWorks(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+
+	fmt.Println("GetActiveWorks called with domain:", domain, "accessKey:", accessKey)
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+			"works":  nil,
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+
+	query := `
+SELECT id, type, title, content, author, slug, parent, created_at, modified_at
+FROM blocks
+WHERE author = ? AND type = 'project' AND created_at > DATE(NOW()) AND status = 1
+ORDER BY created_at DESC
+`
+	args := []interface{}{
+		userID,
+	}
+
+	rows, err := ac.db.Query(query, args...)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+			"works":  nil,
+		})
+		return
+	}
+	defer rows.Close()
+
+	var projects []map[string]interface{}
+	for rows.Next() {
+		var b services.Block
+		err := rows.Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+
+		projects = append(projects, map[string]interface{}{
+			"id":          int64(b.ID),
+			"type":        b.Type,
+			"title":       b.Title,
+			"content":     b.Content,
+			"author":      int64(b.Author),
+			"slug":        b.Slug,
+			"parent":      b.Parent,
+			"created_at":  services.FormatTimeToISO(b.CreatedAt),
+			"modified_at": services.FormatTimeToISO(b.ModifiedAt),
+			"metas":       map[string]string{},
+		})
+	}
+
+	rquery := `
+SELECT id, type, title, content, author, slug, parent, created_at, modified_at
+FROM blocks
+WHERE author = ? AND type = 'recruit' AND created_at > DATE(NOW()) AND status = 1
+ORDER BY created_at DESC
+`
+	rargs := []interface{}{
+		userID,
+	}
+
+	rrows, err := ac.db.Query(rquery, rargs...)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+			"works":  nil,
+		})
+		return
+	}
+	defer rows.Close()
+
+	var recruits []map[string]interface{}
+	for rrows.Next() {
+		var b services.Block
+		err := rows.Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+
+		recruits = append(recruits, map[string]interface{}{
+			"id":          int64(b.ID),
+			"type":        b.Type,
+			"title":       b.Title,
+			"content":     b.Content,
+			"author":      int64(b.Author),
+			"slug":        b.Slug,
+			"parent":      b.Parent,
+			"created_at":  services.FormatTimeToISO(b.CreatedAt),
+			"modified_at": services.FormatTimeToISO(b.ModifiedAt),
+			"metas":       map[string]string{},
+		})
+	}
+
+	// Note: getActiveWorks implementation needed
+	//activeWorks := []map[string]interface{}{}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":   "success",
+		"projects": projects,
+		"recruits": recruits,
 	})
 }
 
