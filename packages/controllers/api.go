@@ -35,9 +35,9 @@ func (ac *ApiController) RegisterApiRoutes() {
 		apiGroup.POST("/initWorker", ac.InitWorker)
 		apiGroup.POST("/startProject", ac.StartProject)
 		apiGroup.GET("/activeWorks", ac.GetActiveWorks)
-		/*apiGroup.GET("/projects/:page_no", ac.GetProjects)
+		apiGroup.GET("/projects/:page_no", ac.GetProjects)
 		apiGroup.GET("/history/:page_no", ac.GetWorkHistory)
-		apiGroup.GET("/profile", ac.GetProfile)
+		/*apiGroup.GET("/profile", ac.GetProfile)
 		apiGroup.POST("/terminateWorker", ac.TerminateWorker)
 		apiGroup.GET("/terminateProject", ac.TerminateProject)
 		apiGroup.GET("/getEmployerDues", ac.GetEmployerDues)
@@ -539,6 +539,25 @@ ORDER BY created_at DESC
 			continue
 		}
 
+		// Fetch user metas for the project author
+		metaQuery := `
+SELECT meta_key, meta_value FROM metas 
+WHERE parent = 'user' AND parent_id = ?
+`
+		metaRows, metaErr := ac.db.Query(metaQuery, b.Author)
+		projectMetas := map[string]string{}
+		if metaErr == nil {
+			defer metaRows.Close()
+			for metaRows.Next() {
+				var metaKey, metaValue string
+				if err := metaRows.Scan(&metaKey, &metaValue); err != nil {
+					log.Println(err)
+					continue
+				}
+				projectMetas[metaKey] = metaValue
+			}
+		}
+
 		projects = append(projects, map[string]interface{}{
 			"id":          int64(b.ID),
 			"type":        b.Type,
@@ -549,8 +568,9 @@ ORDER BY created_at DESC
 			"parent":      b.Parent,
 			"created_at":  services.FormatTimeToISO(b.CreatedAt),
 			"modified_at": services.FormatTimeToISO(b.ModifiedAt),
-			"metas":       map[string]string{},
+			"metas":       projectMetas,
 		})
+
 	}
 
 	rquery := `
@@ -582,6 +602,25 @@ ORDER BY created_at DESC
 			continue
 		}
 
+		// Fetch user metas for the project author
+		metaQuery := `
+SELECT meta_key, meta_value FROM metas 
+WHERE parent = 'user' AND parent_id = ?
+`
+		metaRows, metaErr := ac.db.Query(metaQuery, b.Content)
+		recruitMetas := map[string]string{}
+		if metaErr == nil {
+			defer metaRows.Close()
+			for metaRows.Next() {
+				var metaKey, metaValue string
+				if err := metaRows.Scan(&metaKey, &metaValue); err != nil {
+					log.Println(err)
+					continue
+				}
+				recruitMetas[metaKey] = metaValue
+			}
+		}
+
 		recruits = append(recruits, map[string]interface{}{
 			"id":          int64(b.ID),
 			"type":        b.Type,
@@ -592,7 +631,69 @@ ORDER BY created_at DESC
 			"parent":      b.Parent,
 			"created_at":  services.FormatTimeToISO(b.CreatedAt),
 			"modified_at": services.FormatTimeToISO(b.ModifiedAt),
-			"metas":       map[string]string{},
+			"metas":       recruitMetas,
+		})
+	}
+
+	wquery := `
+SELECT id, type, title, content, author, slug, parent, created_at, modified_at
+FROM blocks
+WHERE content = ? AND type = 'recruit' AND created_at > DATE(NOW()) AND status = 1
+ORDER BY created_at DESC
+`
+	wargs := []interface{}{
+		userID,
+	}
+
+	wrows, err := ac.db.Query(wquery, wargs...)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+			"works":  nil,
+		})
+		return
+	}
+	defer wrows.Close()
+
+	var works []map[string]interface{}
+	for wrows.Next() {
+		var b services.Block
+		err := wrows.Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+
+		// Fetch user metas for the project author
+		metaQuery := `
+SELECT meta_key, meta_value FROM metas 
+WHERE parent = 'user' AND parent_id = ?
+`
+		metaRows, metaErr := ac.db.Query(metaQuery, b.Author)
+		recruitMetas := map[string]string{}
+		if metaErr == nil {
+			defer metaRows.Close()
+			for metaRows.Next() {
+				var metaKey, metaValue string
+				if err := metaRows.Scan(&metaKey, &metaValue); err != nil {
+					log.Println(err)
+					continue
+				}
+				recruitMetas[metaKey] = metaValue
+			}
+		}
+
+		works = append(works, map[string]interface{}{
+			"id":          int64(b.ID),
+			"type":        b.Type,
+			"title":       b.Title,
+			"content":     b.Content,
+			"author":      int64(b.Author),
+			"slug":        b.Slug,
+			"parent":      b.Parent,
+			"created_at":  services.FormatTimeToISO(b.CreatedAt),
+			"modified_at": services.FormatTimeToISO(b.ModifiedAt),
+			"metas":       recruitMetas,
 		})
 	}
 
@@ -603,6 +704,198 @@ ORDER BY created_at DESC
 		"status":   "success",
 		"projects": projects,
 		"recruits": recruits,
+		"works":    works,
+	})
+}
+
+func (ac *ApiController) GetProjects(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+			"works":  nil,
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+	page := c.Param("page_no")
+	pageNo, pErr := strconv.Atoi(page)
+	if pErr != nil || pageNo < 1 {
+		pageNo = 1
+	}
+	offset := (pageNo - 1) * 20
+
+	query := `
+SELECT id, type, title, content, author, slug, parent, created_at, modified_at
+FROM blocks
+WHERE author = ? AND type = 'project' AND status = 1
+ORDER BY created_at DESC
+LIMIT 20 OFFSET ?
+`
+	args := []interface{}{
+		userID,
+		offset,
+	}
+
+	rows, err := ac.db.Query(query, args...)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+			"works":  nil,
+		})
+		return
+	}
+	defer rows.Close()
+
+	var projects []map[string]interface{}
+	for rows.Next() {
+		var b services.Block
+		err := rows.Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+
+		// Fetch user metas for the project author
+		metaQuery := `
+SELECT meta_key, meta_value FROM metas 
+WHERE parent = 'user' AND parent_id = ?
+`
+		metaRows, metaErr := ac.db.Query(metaQuery, b.Author)
+		projectMetas := map[string]string{}
+		if metaErr == nil {
+			defer metaRows.Close()
+			for metaRows.Next() {
+				var metaKey, metaValue string
+				if err := metaRows.Scan(&metaKey, &metaValue); err != nil {
+					log.Println(err)
+					continue
+				}
+				projectMetas[metaKey] = metaValue
+			}
+		}
+
+		projects = append(projects, map[string]interface{}{
+			"id":          int64(b.ID),
+			"type":        b.Type,
+			"title":       b.Title,
+			"content":     b.Content,
+			"author":      int64(b.Author),
+			"slug":        b.Slug,
+			"parent":      b.Parent,
+			"created_at":  services.FormatTimeToISO(b.CreatedAt),
+			"modified_at": services.FormatTimeToISO(b.ModifiedAt),
+			"metas":       projectMetas,
+		})
+
+	}
+
+	// Note: getActiveWorks implementation needed
+	//activeWorks := []map[string]interface{}{}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":   "success",
+		"projects": projects,
+	})
+}
+
+func (ac *ApiController) GetWorkHistory(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+
+	fmt.Println("GetActiveWorks called with domain:", domain, "accessKey:", accessKey)
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+			"works":  nil,
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+	page := c.Param("page_no")
+	pageNo, pErr := strconv.Atoi(page)
+	if pErr != nil || pageNo < 1 {
+		pageNo = 1
+	}
+	offset := (pageNo - 1) * 20
+
+	wquery := `
+SELECT id, type, title, content, author, slug, parent, created_at, modified_at
+FROM blocks
+WHERE content = ? AND type = 'recruit' AND status = 1
+ORDER BY created_at DESC
+LIMIT 20 OFFSET ?
+`
+	wargs := []interface{}{
+		userID,
+		offset,
+	}
+
+	wrows, err := ac.db.Query(wquery, wargs...)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+			"works":  nil,
+		})
+		return
+	}
+	defer wrows.Close()
+
+	var works []map[string]interface{}
+	for wrows.Next() {
+		var b services.Block
+		err := wrows.Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+
+		// Fetch user metas for the project author
+		metaQuery := `
+SELECT meta_key, meta_value FROM metas 
+WHERE parent = 'user' AND parent_id = ?
+`
+		metaRows, metaErr := ac.db.Query(metaQuery, b.Author)
+		recruitMetas := map[string]string{}
+		if metaErr == nil {
+			defer metaRows.Close()
+			for metaRows.Next() {
+				var metaKey, metaValue string
+				if err := metaRows.Scan(&metaKey, &metaValue); err != nil {
+					log.Println(err)
+					continue
+				}
+				recruitMetas[metaKey] = metaValue
+			}
+		}
+
+		works = append(works, map[string]interface{}{
+			"id":          int64(b.ID),
+			"type":        b.Type,
+			"title":       b.Title,
+			"content":     b.Content,
+			"author":      int64(b.Author),
+			"slug":        b.Slug,
+			"parent":      b.Parent,
+			"created_at":  services.FormatTimeToISO(b.CreatedAt),
+			"modified_at": services.FormatTimeToISO(b.ModifiedAt),
+			"metas":       recruitMetas,
+		})
+	}
+
+	// Note: getActiveWorks implementation needed
+	//activeWorks := []map[string]interface{}{}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"works":  works,
 	})
 }
 
