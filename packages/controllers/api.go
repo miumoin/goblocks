@@ -779,6 +779,67 @@ WHERE parent = 'user' AND parent_id = ?
 			}
 		}
 
+		team := []map[string]interface{}{} // Note: team fetching implementation needed
+		rquery := `
+SELECT id, type, title, content, author, slug, parent, created_at, modified_at
+FROM blocks
+WHERE parent = ? AND type = 'recruit' AND status = 1
+ORDER BY created_at DESC
+`
+		args := []interface{}{
+			b.ID,
+		}
+
+		rrows, err := ac.db.Query(rquery, args...)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"status": "fail",
+				"works":  nil,
+			})
+			return
+		}
+		defer rrows.Close()
+		for rrows.Next() {
+			var r services.Block
+			err := rrows.Scan(&r.ID, &r.Type, &r.Title, &r.Content, &r.Author, &r.Slug, &r.Parent, &r.CreatedAt, &r.ModifiedAt)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+
+			// Fetch user metas for the project author
+			rmetaQuery := `
+SELECT meta_key, meta_value FROM metas 
+WHERE parent = 'user' AND parent_id = ?
+`
+			rmetaRows, rmetaErr := ac.db.Query(rmetaQuery, r.Content)
+			recruitMetas := map[string]string{}
+			if rmetaErr == nil {
+				defer rmetaRows.Close()
+				for rmetaRows.Next() {
+					var metaKey, metaValue string
+					if err := metaRows.Scan(&metaKey, &metaValue); err != nil {
+						log.Println(err)
+						continue
+					}
+					recruitMetas[metaKey] = metaValue
+				}
+			}
+
+			team = append(team, map[string]interface{}{
+				"id":          int64(r.ID),
+				"type":        r.Type,
+				"title":       r.Title,
+				"content":     r.Content,
+				"author":      int64(r.Author),
+				"slug":        r.Slug,
+				"parent":      r.Parent,
+				"created_at":  services.FormatTimeToISO(r.CreatedAt),
+				"modified_at": services.FormatTimeToISO(r.ModifiedAt),
+				"metas":       recruitMetas,
+			})
+		}
+
 		projects = append(projects, map[string]interface{}{
 			"id":          int64(b.ID),
 			"type":        b.Type,
@@ -790,6 +851,7 @@ WHERE parent = 'user' AND parent_id = ?
 			"created_at":  services.FormatTimeToISO(b.CreatedAt),
 			"modified_at": services.FormatTimeToISO(b.ModifiedAt),
 			"metas":       projectMetas,
+			"team":        team,
 		})
 
 	}
