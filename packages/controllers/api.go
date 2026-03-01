@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/miumoin/agencybot/packages/services"
@@ -37,6 +38,8 @@ func (ac *ApiController) RegisterApiRoutes() {
 		apiGroup.GET("/activeWorks", ac.GetActiveWorks)
 		apiGroup.GET("/projects/:page_no", ac.GetProjects)
 		apiGroup.GET("/history/:page_no", ac.GetWorkHistory)
+		apiGroup.POST("/terminateMember", ac.TerminateMember)
+		apiGroup.POST("/terminateProject", ac.TerminateProject)
 		/*apiGroup.GET("/profile", ac.GetProfile)
 		apiGroup.POST("/terminateWorker", ac.TerminateWorker)
 		apiGroup.GET("/terminateProject", ac.TerminateProject)
@@ -486,10 +489,24 @@ func (ac *ApiController) StartProject(c *gin.Context) {
 		return
 	}
 
+	workerName, _ := databaseManager.GetMeta("user", content.WorkerId, "name")
+	workerPicture, _ := databaseManager.GetMeta("user", content.WorkerId, "picture")
+
+	worker := map[string]interface{}{
+		"id":     content.WorkerId,
+		"name":   workerName,
+		"email":  "", //email not shared
+		"phone":  "", //phone not shared
+		"avatar": workerPicture,
+		"role":   "Worker", //default role
+		"rating": 0.0,      //default rating
+	}
+
 	// Note: Further implementation needed to actually start a project
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
+		"worker": worker,
 	})
 }
 
@@ -511,9 +528,9 @@ func (ac *ApiController) GetActiveWorks(c *gin.Context) {
 	userID := databaseManager.GetCurrentUser()
 
 	query := `
-SELECT id, type, title, content, author, slug, parent, created_at, modified_at
+SELECT id, type, title, content, author, slug, parent, created_at, modified_at, status
 FROM blocks
-WHERE author = ? AND type = 'project' AND created_at > DATE(NOW()) AND status = 1
+WHERE author = ? AND type = 'project' AND created_at > DATE(NOW()) AND status > 0
 ORDER BY created_at DESC
 `
 	args := []interface{}{
@@ -533,7 +550,7 @@ ORDER BY created_at DESC
 	var projects []map[string]interface{}
 	for rows.Next() {
 		var b services.Block
-		err := rows.Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt)
+		err := rows.Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt, &b.Status)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -569,14 +586,15 @@ WHERE parent = 'user' AND parent_id = ?
 			"created_at":  services.FormatTimeToISO(b.CreatedAt),
 			"modified_at": services.FormatTimeToISO(b.ModifiedAt),
 			"metas":       projectMetas,
+			"status":      b.Status,
 		})
 
 	}
 
 	rquery := `
-SELECT id, type, title, content, author, slug, parent, created_at, modified_at
+SELECT id, type, title, content, author, slug, parent, created_at, modified_at, status
 FROM blocks
-WHERE author = ? AND type = 'recruit' AND created_at > DATE(NOW()) AND status = 1
+WHERE author = ? AND type = 'recruit' AND created_at > DATE(NOW()) AND status > 0
 ORDER BY created_at DESC
 `
 	rargs := []interface{}{
@@ -596,7 +614,7 @@ ORDER BY created_at DESC
 	var recruits []map[string]interface{}
 	for rrows.Next() {
 		var b services.Block
-		err := rows.Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt)
+		err := rrows.Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt, &b.Status)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -632,13 +650,14 @@ WHERE parent = 'user' AND parent_id = ?
 			"created_at":  services.FormatTimeToISO(b.CreatedAt),
 			"modified_at": services.FormatTimeToISO(b.ModifiedAt),
 			"metas":       recruitMetas,
+			"status":      b.Status,
 		})
 	}
 
 	wquery := `
-SELECT id, type, title, content, author, slug, parent, created_at, modified_at
+SELECT id, type, title, content, author, slug, parent, created_at, modified_at, status
 FROM blocks
-WHERE content = ? AND type = 'recruit' AND created_at > DATE(NOW()) AND status = 1
+WHERE content = ? AND type = 'recruit' AND created_at > DATE(NOW()) AND status > 0
 ORDER BY created_at DESC
 `
 	wargs := []interface{}{
@@ -658,7 +677,7 @@ ORDER BY created_at DESC
 	var works []map[string]interface{}
 	for wrows.Next() {
 		var b services.Block
-		err := wrows.Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt)
+		err := wrows.Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt, &b.Status)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -694,6 +713,7 @@ WHERE parent = 'user' AND parent_id = ?
 			"created_at":  services.FormatTimeToISO(b.CreatedAt),
 			"modified_at": services.FormatTimeToISO(b.ModifiedAt),
 			"metas":       recruitMetas,
+			"status":      b.Status,
 		})
 	}
 
@@ -730,9 +750,9 @@ func (ac *ApiController) GetProjects(c *gin.Context) {
 	offset := (pageNo - 1) * 20
 
 	query := `
-SELECT id, type, title, content, author, slug, parent, created_at, modified_at
+SELECT id, type, title, content, author, slug, parent, created_at, modified_at, status
 FROM blocks
-WHERE author = ? AND type = 'project' AND status = 1
+WHERE author = ? AND type = 'project' AND status > 0
 ORDER BY created_at DESC
 LIMIT 20 OFFSET ?
 `
@@ -754,7 +774,7 @@ LIMIT 20 OFFSET ?
 	var projects []map[string]interface{}
 	for rows.Next() {
 		var b services.Block
-		err := rows.Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt)
+		err := rows.Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt, &b.Status)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -781,9 +801,9 @@ WHERE parent = 'user' AND parent_id = ?
 
 		team := []map[string]interface{}{} // Note: team fetching implementation needed
 		rquery := `
-SELECT id, type, title, content, author, slug, parent, created_at, modified_at
+SELECT id, type, title, content, author, slug, parent, created_at, modified_at, status
 FROM blocks
-WHERE parent = ? AND type = 'recruit' AND status = 1
+WHERE parent = ? AND type = 'recruit' AND status > 0
 ORDER BY created_at DESC
 `
 		args := []interface{}{
@@ -801,7 +821,7 @@ ORDER BY created_at DESC
 		defer rrows.Close()
 		for rrows.Next() {
 			var r services.Block
-			err := rrows.Scan(&r.ID, &r.Type, &r.Title, &r.Content, &r.Author, &r.Slug, &r.Parent, &r.CreatedAt, &r.ModifiedAt)
+			err := rrows.Scan(&r.ID, &r.Type, &r.Title, &r.Content, &r.Author, &r.Slug, &r.Parent, &r.CreatedAt, &r.ModifiedAt, &r.Status)
 			if err != nil {
 				log.Println(err)
 				continue
@@ -818,7 +838,7 @@ WHERE parent = 'user' AND parent_id = ?
 				defer rmetaRows.Close()
 				for rmetaRows.Next() {
 					var metaKey, metaValue string
-					if err := metaRows.Scan(&metaKey, &metaValue); err != nil {
+					if err := rmetaRows.Scan(&metaKey, &metaValue); err != nil {
 						log.Println(err)
 						continue
 					}
@@ -837,6 +857,7 @@ WHERE parent = 'user' AND parent_id = ?
 				"created_at":  services.FormatTimeToISO(r.CreatedAt),
 				"modified_at": services.FormatTimeToISO(r.ModifiedAt),
 				"metas":       recruitMetas,
+				"status":      r.Status,
 			})
 		}
 
@@ -852,6 +873,7 @@ WHERE parent = 'user' AND parent_id = ?
 			"modified_at": services.FormatTimeToISO(b.ModifiedAt),
 			"metas":       projectMetas,
 			"team":        team,
+			"status":      b.Status,
 		})
 
 	}
@@ -891,7 +913,7 @@ func (ac *ApiController) GetWorkHistory(c *gin.Context) {
 	wquery := `
 SELECT id, type, title, content, author, slug, parent, created_at, modified_at
 FROM blocks
-WHERE content = ? AND type = 'recruit' AND status = 1
+WHERE content = ? AND type = 'recruit' AND status > 0
 ORDER BY created_at DESC
 LIMIT 20 OFFSET ?
 `
@@ -958,6 +980,85 @@ WHERE parent = 'user' AND parent_id = ?
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"works":  works,
+	})
+}
+
+func (ac *ApiController) TerminateMember(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+
+	var content struct {
+		WorkerId  int64 `json:"worker_id"`
+		ProjectId int64 `json:"project_id"` //optional, for starting existing projects
+	}
+
+	if err := c.BindJSON(&content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail"})
+		return
+	}
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+	utils := services.NewUtilities(ac.db)
+
+	if content.ProjectId > 0 {
+		utils.TerminateWorker(userID, content.WorkerId, content.ProjectId)
+		databaseManager.AddMeta("recruit", content.WorkerId, "ended_at", time.Now().Format("2006-01-02 15:04:05"))
+	}
+
+	// Note: Implementation needed to terminate a member from a project
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+	})
+}
+
+func (ac *ApiController) TerminateProject(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+
+	var content struct {
+		ProjectId int64 `json:"project_id"` //optional, for starting existing projects
+	}
+
+	if err := c.BindJSON(&content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail"})
+		return
+	}
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+	utils := services.NewUtilities(ac.db)
+
+	if content.ProjectId > 0 {
+		wblocks, _ := utils.TerminateWorkers(userID, content.ProjectId)
+		for _, block := range wblocks {
+			ended_at, _ := databaseManager.GetMeta("recruit", block.ID, "ended_at")
+			if ended_at == "" {
+				databaseManager.AddMeta("recruit", block.ID, "ended_at", time.Now().Format("2006-01-02 15:04:05"))
+			}
+		}
+
+		utils.TerminateProject(userID, content.ProjectId)
+		databaseManager.AddMeta("project", content.ProjectId, "ended_at", time.Now().Format("2006-01-02 15:04:05"))
+	}
+
+	// Note: Implementation needed to terminate a project
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
 	})
 }
 

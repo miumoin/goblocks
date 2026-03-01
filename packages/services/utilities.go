@@ -514,3 +514,74 @@ func (u *Utilities) GetSubscriberUserID(db *sql.DB, customerID, subscriptionID s
 
 	return parentID, nil
 }
+
+// DeleteProfile removes a block by ID
+func (u *Utilities) TerminateWorker(author int64, worker_id int64, project_id int64) error {
+	_, err := u.db.Exec(
+		"UPDATE blocks SET status = ? WHERE author = ? AND id = ? AND parent = ?",
+		2, author, worker_id, project_id,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DeleteProfile removes a block by ID
+func (u *Utilities) TerminateWorkers(author int64, projectID int64) ([]Block, error) {
+	tx, err := u.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	// 1. Select affected rows
+	rows, err := tx.Query(
+		"SELECT id, author, parent, status FROM blocks WHERE author = ? AND parent = ?",
+		author, projectID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var blocks []Block
+	for rows.Next() {
+		var b Block
+		if err := rows.Scan(&b.ID, &b.Author, &b.Parent, &b.Status); err != nil {
+			return nil, err
+		}
+		blocks = append(blocks, b)
+	}
+
+	// 2. Update rows
+	_, err = tx.Exec(
+		"UPDATE blocks SET status = ? WHERE author = ? AND parent = ?",
+		2, author, projectID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Commit
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return blocks, nil
+}
+
+// DeleteProfile removes a block by ID
+func (u *Utilities) TerminateProject(author int64, project_id int64) error {
+	_, err := u.db.Exec(
+		"UPDATE blocks SET status = ? WHERE author = ? AND id = ?",
+		2, author, project_id,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

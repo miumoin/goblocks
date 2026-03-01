@@ -222,6 +222,7 @@ type Block struct {
 	Parent     *int64 `json:"parent"`
 	CreatedAt  string `json:"created_at"`
 	ModifiedAt string `json:"modified_at"`
+	Status     int    `json:"status"`
 }
 
 func (dm *DatabaseManager) AddBlock(userID int64, block map[string]interface{}, slug string) (map[string]interface{}, error) {
