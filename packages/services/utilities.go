@@ -585,3 +585,17 @@ func (u *Utilities) TerminateProject(author int64, project_id int64) error {
 
 	return nil
 }
+
+// DeleteProfile removes a block by ID
+func (u *Utilities) LeaveProject(author int64, worker_id int64, project_id int64) error {
+	_, err := u.db.Exec(
+		"UPDATE blocks SET status = ? WHERE id = ? AND parent = ?",
+		2, worker_id, project_id,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

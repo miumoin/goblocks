@@ -40,6 +40,7 @@ func (ac *ApiController) RegisterApiRoutes() {
 		apiGroup.GET("/history/:page_no", ac.GetWorkHistory)
 		apiGroup.POST("/terminateMember", ac.TerminateMember)
 		apiGroup.POST("/terminateProject", ac.TerminateProject)
+		apiGroup.POST("/leaveProject", ac.LeaveProject)
 		/*apiGroup.GET("/profile", ac.GetProfile)
 		apiGroup.POST("/terminateWorker", ac.TerminateWorker)
 		apiGroup.GET("/terminateProject", ac.TerminateProject)
@@ -911,7 +912,7 @@ func (ac *ApiController) GetWorkHistory(c *gin.Context) {
 	offset := (pageNo - 1) * 20
 
 	wquery := `
-SELECT id, type, title, content, author, slug, parent, created_at, modified_at
+SELECT id, type, title, content, author, slug, parent, created_at, modified_at, status
 FROM blocks
 WHERE content = ? AND type = 'recruit' AND status > 0
 ORDER BY created_at DESC
@@ -935,7 +936,7 @@ LIMIT 20 OFFSET ?
 	var works []map[string]interface{}
 	for wrows.Next() {
 		var b services.Block
-		err := wrows.Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt)
+		err := wrows.Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt, &b.Status)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -971,6 +972,7 @@ WHERE parent = 'user' AND parent_id = ?
 			"created_at":  services.FormatTimeToISO(b.CreatedAt),
 			"modified_at": services.FormatTimeToISO(b.ModifiedAt),
 			"metas":       recruitMetas,
+			"status":      b.Status,
 		})
 	}
 
@@ -1057,6 +1059,42 @@ func (ac *ApiController) TerminateProject(c *gin.Context) {
 	}
 
 	// Note: Implementation needed to terminate a project
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+	})
+}
+
+func (ac *ApiController) LeaveProject(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+
+	var content struct {
+		WorkerId  int64 `json:"worker_id"`
+		ProjectId int64 `json:"project_id"` //optional, for starting existing projects
+	}
+
+	if err := c.BindJSON(&content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail"})
+		return
+	}
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+	utils := services.NewUtilities(ac.db)
+
+	if content.ProjectId > 0 {
+		utils.LeaveProject(userID, content.WorkerId, content.ProjectId)
+		databaseManager.AddMeta("recruit", content.WorkerId, "ended_at", time.Now().Format("2006-01-02 15:04:05"))
+	}
+
+	// Note: Implementation needed to terminate a member from a project
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 	})
