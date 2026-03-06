@@ -41,6 +41,8 @@ func (ac *ApiController) RegisterApiRoutes() {
 		apiGroup.POST("/terminateMember", ac.TerminateMember)
 		apiGroup.POST("/terminateProject", ac.TerminateProject)
 		apiGroup.POST("/leaveProject", ac.LeaveProject)
+		apiGroup.GET("/getPendingPay", ac.GetPendingPay)
+		apiGroup.POST("/markPaid", ac.MarkPaid)
 		/*apiGroup.GET("/profile", ac.GetProfile)
 		apiGroup.POST("/terminateWorker", ac.TerminateWorker)
 		apiGroup.GET("/terminateProject", ac.TerminateProject)
@@ -1095,6 +1097,144 @@ func (ac *ApiController) LeaveProject(c *gin.Context) {
 	}
 
 	// Note: Implementation needed to terminate a member from a project
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+	})
+}
+
+func (ac *ApiController) GetPendingPay(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+
+	fmt.Println("GetActiveWorks called with domain:", domain, "accessKey:", accessKey)
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+			"works":  nil,
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+	page := c.Param("page_no")
+	pageNo, pErr := strconv.Atoi(page)
+	if pErr != nil || pageNo < 1 {
+		pageNo = 1
+	}
+	offset := (pageNo - 1) * 20
+
+	wquery := `
+SELECT id, type, title, content, author, slug, parent, created_at, modified_at, status
+FROM blocks
+WHERE author = ? AND type = 'recruit' AND status = 2
+ORDER BY created_at DESC
+LIMIT 20 OFFSET ?
+`
+	wargs := []interface{}{
+		userID,
+		offset,
+	}
+
+	wrows, err := ac.db.Query(wquery, wargs...)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+			"works":  nil,
+		})
+		return
+	}
+	defer wrows.Close()
+
+	var recruits []map[string]interface{}
+	for wrows.Next() {
+		var b services.Block
+		err := wrows.Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt, &b.Status)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+
+		// Fetch user metas for the project author
+		metaQuery := `
+SELECT meta_key, meta_value FROM metas 
+WHERE parent = 'user' AND parent_id = ?
+`
+		metaRows, metaErr := ac.db.Query(metaQuery, b.Author)
+		recruitMetas := map[string]string{}
+		if metaErr == nil {
+			defer metaRows.Close()
+			for metaRows.Next() {
+				var metaKey, metaValue string
+				if err := metaRows.Scan(&metaKey, &metaValue); err != nil {
+					log.Println(err)
+					continue
+				}
+				recruitMetas[metaKey] = metaValue
+			}
+		}
+
+		recruits = append(recruits, map[string]interface{}{
+			"id":          int64(b.ID),
+			"type":        b.Type,
+			"title":       b.Title,
+			"content":     b.Content,
+			"author":      int64(b.Author),
+			"slug":        b.Slug,
+			"parent":      b.Parent,
+			"created_at":  services.FormatTimeToISO(b.CreatedAt),
+			"modified_at": services.FormatTimeToISO(b.ModifiedAt),
+			"metas":       recruitMetas,
+			"status":      b.Status,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":   "success",
+		"recruits": recruits,
+	})
+}
+
+func (ac *ApiController) MarkPaid(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+
+	var content struct {
+		WorkerId string `json:"worker_id"`
+	}
+
+	fmt.Println("MarkPaid called with domain:", domain, "accessKey:", accessKey, "content:", content)
+
+	if err := c.BindJSON(&content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail"})
+		return
+	}
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+	utils := services.NewUtilities(ac.db)
+
+	workerID, err := strconv.ParseInt(content.WorkerId, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+		})
+	}
+
+	if workerID > 0 {
+		fmt.Println("MarkPaid called with WorkerId:", workerID, "UserID:", userID)
+		utils.MarkRecruitsPaid(userID, workerID)
+	}
+
+	// Note: Implementation needed to mark a recruit as paid
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 	})

@@ -599,3 +599,21 @@ func (u *Utilities) LeaveProject(author int64, worker_id int64, project_id int64
 
 	return nil
 }
+
+func (u *Utilities) MarkRecruitsPaid(author int64, worker_id int64) error {
+	fmt.Println("Marking worker_id", worker_id, "as paid for author", author)
+
+	_, err := u.db.Exec(
+		"UPDATE blocks SET status = ? WHERE author = ? AND type = ? AND content = ?",
+		3, author, "recruit", worker_id,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Marked worker_id", worker_id, "as paid for author", author)
+	fmt.Println("Rows affected:", 0)
+
+	return nil
+}
