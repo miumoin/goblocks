@@ -533,7 +533,7 @@ func (ac *ApiController) GetActiveWorks(c *gin.Context) {
 	query := `
 SELECT id, type, title, content, author, slug, parent, created_at, modified_at, status
 FROM blocks
-WHERE author = ? AND type = 'project' AND created_at > DATE(NOW()) AND status > 0
+WHERE author = ? AND type = 'project' AND status = 1
 ORDER BY created_at DESC
 `
 	args := []interface{}{
@@ -597,7 +597,7 @@ WHERE parent = 'user' AND parent_id = ?
 	rquery := `
 SELECT id, type, title, content, author, slug, parent, created_at, modified_at, status
 FROM blocks
-WHERE author = ? AND type = 'recruit' AND created_at > DATE(NOW()) AND status > 0
+WHERE content = ? AND type = 'recruit' AND status = 1
 ORDER BY created_at DESC
 `
 	rargs := []interface{}{
@@ -628,7 +628,7 @@ ORDER BY created_at DESC
 SELECT meta_key, meta_value FROM metas 
 WHERE parent = 'user' AND parent_id = ?
 `
-		metaRows, metaErr := ac.db.Query(metaQuery, b.Content)
+		metaRows, metaErr := ac.db.Query(metaQuery, b.Author)
 		recruitMetas := map[string]string{}
 		if metaErr == nil {
 			defer metaRows.Close()
