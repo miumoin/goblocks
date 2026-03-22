@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"os"
 	"strconv"
 	"time"
 
@@ -32,6 +34,8 @@ func (ac *ApiController) RegisterApiRoutes() {
 	apiGroup := ac.router.Group("/api")
 	{
 		apiGroup.POST("/login", ac.Login)
+		apiGroup.GET("/googleAuth/init", ac.initGoogleAuth)
+		apiGroup.GET("/googleAuth/callback", ac.handleGoogleAuthCallback)
 		apiGroup.POST("/verify", ac.Verify)
 		apiGroup.POST("/initWorker", ac.InitWorker)
 		apiGroup.POST("/startProject", ac.StartProject)
@@ -1238,6 +1242,90 @@ func (ac *ApiController) MarkPaid(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 	})
+}
+
+func (ac *ApiController) initGoogleAuth(c *gin.Context) {
+	r := c.Request
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+
+	redirect_url := scheme + "://" + r.Host + "/api/googleAuth/callback/"
+	fmt.Println("Redirecting to Google OAuth with redirect URL:", redirect_url)
+
+	http.Redirect(c.Writer, c.Request, "https://accounts.google.com/o/oauth2/v2/auth?client_id="+os.Getenv("GOOGLE_CLIENT_ID")+"&redirect_uri="+redirect_url+"&response_type=code&scope=email%20profile", http.StatusFound)
+}
+
+func (ac *ApiController) handleGoogleAuthCallback(c *gin.Context) {
+	code := c.Query("code")
+	if code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": "Code not provided"})
+		return
+	}
+
+	tokenResp, err := http.PostForm("https://oauth2.googleapis.com/token", url.Values{
+		"code":          {code},
+		"client_id":     {os.Getenv("GOOGLE_CLIENT_ID")},
+		"client_secret": {os.Getenv("GOOGLE_CLIENT_SECRET")},
+		"redirect_uri":  {"http://" + c.Request.Host + "/api/googleAuth/callback/"},
+		"grant_type":    {"authorization_code"},
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "message": "Failed to exchange code for token"})
+		return
+	}
+	defer tokenResp.Body.Close()
+
+	var tokenData struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.NewDecoder(tokenResp.Body).Decode(&tokenData); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "message": "Failed to decode token response"})
+		return
+	}
+
+	userInfoReq, _ := http.NewRequest("GET", "https://www.googleapis.com/oauth2/v2/userinfo", nil)
+	userInfoReq.Header.Set("Authorization", "Bearer "+tokenData.AccessToken)
+	userInfoResp, err := http.DefaultClient.Do(userInfoReq)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "message": "Failed to fetch user info"})
+		return
+	}
+	defer userInfoResp.Body.Close()
+
+	var userInfo struct {
+		ID      string `json:"id"`
+		Name    string `json:"name"`
+		Email   string `json:"email"`
+		Picture string `json:"picture"`
+	}
+	if err := json.NewDecoder(userInfoResp.Body).Decode(&userInfo); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "message": "Failed to decode user info"})
+		return
+	}
+
+	/*c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"user": map[string]interface{}{
+			"id":     userInfo.ID,
+			"name":   userInfo.Name,
+			"email":  userInfo.Email,
+			"avatar": userInfo.Picture,
+		},
+	})*/
+
+	params := url.Values{}
+	params.Add("status", "success")
+	params.Add("id", userInfo.ID)
+	params.Add("name", userInfo.Name)
+	params.Add("email", userInfo.Email)
+	params.Add("avatar", userInfo.Picture)
+
+	deepLink := "coupdemain://auth/callback?" + params.Encode()
+	fmt.Println("Redirecting to deep link:", deepLink)
+
+	http.Redirect(c.Writer, c.Request, deepLink, http.StatusFound)
 }
 
 /*

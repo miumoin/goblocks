@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Test Page</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 40px;
+        }
+        .qr-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        .qr-card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .qr-card h3 {
+            margin: 0 0 10px 0;
+            color: #007AFF;
+            font-size: 20px;
+        }
+        .qr-card p {
+            margin: 0 0 15px 0;
+            color: #666;
+            font-size: 14px;
+        }
+        .qr-code {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        .worker-id {
+            background: #f0f0f0;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #666;
+            margin-top: 10px;
+        }
+        .instructions {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            border-left: 4px solid #007AFF;
+        }
+        .instructions h2 {
+            margin: 0 0 10px 0;
+            color: #007AFF;
+            font-size: 18px;
+        }
+        .instructions ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .instructions li {
+            margin: 8px 0;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Worker QR Code Test Page</h1>
+    <p class="subtitle">Scan these QR codes with your app to test the worker assignment flow</p>
+    
+    <div class="instructions">
+        <h2>📱 How to Test:</h2>
+        <ol>
+            <li>Open your app in a browser (npm run dev)</li>
+            <li>Switch to the "Hire" tab</li>
+            <li>Click the scan button to activate the camera</li>
+            <li>Point your device camera at one of the QR codes below</li>
+            <li>The app will scan and show the worker's profile</li>
+            <li>Assign them to a project!</li>
+        </ol>
+    </div>
+
+    <div class="qr-grid" id="qr-container"></div>
+
+    <script>
+        const workers = [
+            {
+                id: 'worker-123',
+                name: 'John Smith',
+                role: 'Carpenter',
+                rating: 4.8
+            },
+            {
+                id: 'worker-456',
+                name: 'Emma Wilson',
+                role: 'Electrician',
+                rating: 4.9
+            },
+            {
+                id: 'worker-789',
+                name: 'Michael Brown',
+                role: 'Plumber',
+                rating: 4.7
+            }
+        ];
+
+        const container = document.getElementById('qr-container');
+
+        workers.forEach(worker => {
+            const card = document.createElement('div');
+            card.className = 'qr-card';
+            
+            card.innerHTML = `
+                <h3>${worker.name}</h3>
+                <p>${worker.role} • ⭐ ${worker.rating}</p>
+                <div class="qr-code" id="qr-${worker.id}"></div>
+                <div class="worker-id">ID: ${worker.id}</div>
+            `;
+            
+            container.appendChild(card);
+
+            // Generate QR code
+            new QRCode(document.getElementById(`qr-${worker.id}`), {
+                text: worker.id,
+                width: 200,
+                height: 200,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        });
+    </script>
+</body>
+</html>

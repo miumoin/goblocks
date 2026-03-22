@@ -53,6 +53,7 @@ func main() {
 	// Initialize services
 	apiController := controllers.NewApiController(db, router)
 	apiController.RegisterApiRoutes()
+	apiController.RegisterHomeRoutes()
 
 	// Start server
 	port := os.Getenv("PORT")
