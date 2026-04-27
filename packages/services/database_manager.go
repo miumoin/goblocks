@@ -233,7 +233,7 @@ func (dm *DatabaseManager) AddBlock(userID int64, block map[string]interface{}, 
 	var existingID int
 	err := dm.db.QueryRow("SELECT id FROM blocks WHERE slug = ?", slug).Scan(&existingID)
 
-	now := time.Now()
+	now := time.Now().UTC()
 	if err == nil {
 		_, err = dm.db.Exec(
 			"UPDATE blocks SET title = ?, content = ?, modified_at = ? WHERE slug = ?",

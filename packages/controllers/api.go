@@ -459,6 +459,7 @@ func (ac *ApiController) StartProject(c *gin.Context) {
 	userID := databaseManager.GetCurrentUser()
 
 	if content.ProjectId < 1 {
+		fmt.Println("Starting new project with name:", content.ProjectName)
 		projectBlockData := map[string]interface{}{
 			"type":    "project",
 			"title":   content.ProjectName,
@@ -581,6 +582,10 @@ WHERE parent = 'user' AND parent_id = ?
 				projectMetas[metaKey] = metaValue
 			}
 		}
+		projectEnds, _ := databaseManager.GetMeta("project", b.ID, "ended_at") // Note: ended_at meta should be set when a recruit block is ended
+		if projectEnds != "" {
+			projectMetas["ended_at"] = projectEnds
+		}
 
 		projects = append(projects, map[string]interface{}{
 			"id":          int64(b.ID),
@@ -645,6 +650,10 @@ WHERE parent = 'user' AND parent_id = ?
 				recruitMetas[metaKey] = metaValue
 			}
 		}
+		recruitEnds, _ := databaseManager.GetMeta("recruit", b.ID, "ended_at") // Note: ended_at meta should be set when a recruit block is ended
+		if recruitEnds != "" {
+			recruitMetas["ended_at"] = recruitEnds
+		}
 
 		recruits = append(recruits, map[string]interface{}{
 			"id":          int64(b.ID),
@@ -707,6 +716,10 @@ WHERE parent = 'user' AND parent_id = ?
 				}
 				recruitMetas[metaKey] = metaValue
 			}
+		}
+		recruitEnds, _ := databaseManager.GetMeta("recruit", b.ID, "ended_at") // Note: ended_at meta should be set when a recruit block is ended
+		if recruitEnds != "" {
+			recruitMetas["ended_at"] = recruitEnds
 		}
 
 		works = append(works, map[string]interface{}{
@@ -805,6 +818,10 @@ WHERE parent = 'user' AND parent_id = ?
 				projectMetas[metaKey] = metaValue
 			}
 		}
+		projectEnds, _ := databaseManager.GetMeta("project", b.ID, "ended_at") // Note: ended_at meta should be set when a recruit block is ended
+		if projectEnds != "" {
+			projectMetas["ended_at"] = projectEnds
+		}
 
 		team := []map[string]interface{}{} // Note: team fetching implementation needed
 		rquery := `
@@ -851,6 +868,10 @@ WHERE parent = 'user' AND parent_id = ?
 					}
 					recruitMetas[metaKey] = metaValue
 				}
+			}
+			recruitEnds, _ := databaseManager.GetMeta("recruit", r.ID, "ended_at") // Note: ended_at meta should be set when a recruit block is ended
+			if recruitEnds != "" {
+				recruitMetas["ended_at"] = recruitEnds
 			}
 
 			team = append(team, map[string]interface{}{
@@ -1018,7 +1039,7 @@ func (ac *ApiController) TerminateMember(c *gin.Context) {
 
 	if content.ProjectId > 0 {
 		utils.TerminateWorker(userID, content.WorkerId, content.ProjectId)
-		databaseManager.AddMeta("recruit", content.WorkerId, "ended_at", time.Now().Format("2006-01-02 15:04:05"))
+		databaseManager.AddMeta("recruit", content.WorkerId, "ended_at", time.Now().UTC().Format("2006-01-02 15:04:05"))
 	}
 
 	// Note: Implementation needed to terminate a member from a project
@@ -1056,12 +1077,12 @@ func (ac *ApiController) TerminateProject(c *gin.Context) {
 		for _, block := range wblocks {
 			ended_at, _ := databaseManager.GetMeta("recruit", block.ID, "ended_at")
 			if ended_at == "" {
-				databaseManager.AddMeta("recruit", block.ID, "ended_at", time.Now().Format("2006-01-02 15:04:05"))
+				databaseManager.AddMeta("recruit", block.ID, "ended_at", time.Now().UTC().Format("2006-01-02 15:04:05"))
 			}
 		}
 
 		utils.TerminateProject(userID, content.ProjectId)
-		databaseManager.AddMeta("project", content.ProjectId, "ended_at", time.Now().Format("2006-01-02 15:04:05"))
+		databaseManager.AddMeta("project", content.ProjectId, "ended_at", time.Now().UTC().Format("2006-01-02 15:04:05"))
 	}
 
 	// Note: Implementation needed to terminate a project
@@ -1097,7 +1118,7 @@ func (ac *ApiController) LeaveProject(c *gin.Context) {
 
 	if content.ProjectId > 0 {
 		utils.LeaveProject(userID, content.WorkerId, content.ProjectId)
-		databaseManager.AddMeta("recruit", content.WorkerId, "ended_at", time.Now().Format("2006-01-02 15:04:05"))
+		databaseManager.AddMeta("recruit", content.WorkerId, "ended_at", time.Now().UTC().Format("2006-01-02 15:04:05"))
 	}
 
 	// Note: Implementation needed to terminate a member from a project
