@@ -234,13 +234,22 @@ func (dm *DatabaseManager) AddBlock(userID int64, block map[string]interface{}, 
 
 	now := time.Now()
 	if err == nil {
-		_, err = dm.db.Exec(
-			"UPDATE blocks SET title = ?, content = ?, modified_at = ? WHERE slug = ?",
-			block["title"], block["content"], now.Format("2006-01-02 15:04:05"), slug,
-		)
+		if _, hasStatus := block["status"]; hasStatus {
+			status := toInt64(block["status"])
+			_, err = dm.db.Exec(
+				"UPDATE blocks SET title = ?, content = ?, modified_at = ?, status = ? WHERE slug = ?",
+				block["title"], block["content"], now.Format("2006-01-02 15:04:05"), status, slug,
+			)
+		} else {
+			_, err = dm.db.Exec(
+				"UPDATE blocks SET title = ?, content = ?, modified_at = ? WHERE slug = ?",
+				block["title"], block["content"], now.Format("2006-01-02 15:04:05"), slug,
+			)
+		}
 		if err != nil {
 			return nil, err
 		}
+
 	} else if err == sql.ErrNoRows {
 		parentPtr := toInt64(block["parent"])
 
@@ -258,7 +267,7 @@ func (dm *DatabaseManager) AddBlock(userID int64, block map[string]interface{}, 
 
 	var b Block
 	err = dm.db.QueryRow(
-		"SELECT id, type, title, content, author, slug, parent, created_at, modified_at FROM blocks WHERE slug = ? AND status = 1",
+		"SELECT id, type, title, content, author, slug, parent, created_at, modified_at FROM blocks WHERE slug = ?",
 		slug,
 	).Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt)
 	if err != nil {
@@ -308,13 +317,13 @@ func (dm *DatabaseManager) GetBlocks(userID int64, blockType string, page int, e
 	offset := (page - 1) * entriesPerPage
 
 	query := `
-SELECT id, type, title, content, author, slug, parent, created_at, modified_at
+SELECT id, type, title, content, author, slug, parent, created_at, modified_at, status
 FROM blocks
 WHERE ( author = ? OR id IN (
     SELECT parent_id FROM metas
     WHERE parent = ? AND meta_key = ?
 ))
-AND type = ? AND status = 1
+AND type = ? AND status > 0
 `
 	args := []interface{}{
 		userID,
@@ -338,8 +347,8 @@ AND type = ? AND status = 1
 
 	var blocks []map[string]interface{}
 	for rows.Next() {
-		var b Block
-		err := rows.Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt)
+		var b BlockType
+		err := rows.Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt, &b.Status)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -356,6 +365,7 @@ AND type = ? AND status = 1
 			"created_at":  FormatTimeToISO(b.CreatedAt),
 			"modified_at": FormatTimeToISO(b.ModifiedAt),
 			"metas":       map[string]string{},
+			"status":      b.Status,
 		})
 	}
 
@@ -371,7 +381,7 @@ func FormatTimeToISO(mysqlTime string) string {
 }
 
 func (dm *DatabaseManager) GetBlock(userID int64, blockType string, id int64, slug string, parent int64) (map[string]interface{}, error) {
-	query := "SELECT id, type, title, content, author, slug, parent, created_at, modified_at FROM blocks WHERE status > 0 AND ( author = ? OR id IN ( SELECT parent_id FROM metas WHERE parent = ? AND meta_key = ? ) )"
+	query := "SELECT id, type, title, content, author, slug, parent, created_at, modified_at, status FROM blocks WHERE status > 0 AND ( author = ? OR id IN ( SELECT parent_id FROM metas WHERE parent = ? AND meta_key = ? ) )"
 	args := []interface{}{userID, blockType, "privilege_" + strconv.FormatInt(userID, 10)}
 
 	if blockType != "" {
@@ -392,7 +402,7 @@ func (dm *DatabaseManager) GetBlock(userID int64, blockType string, id int64, sl
 	}
 
 	var b BlockType
-	err := dm.db.QueryRow(query, args...).Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt)
+	err := dm.db.QueryRow(query, args...).Scan(&b.ID, &b.Type, &b.Title, &b.Content, &b.Author, &b.Slug, &b.Parent, &b.CreatedAt, &b.ModifiedAt, &b.Status)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -410,6 +420,7 @@ func (dm *DatabaseManager) GetBlock(userID int64, blockType string, id int64, sl
 		"parent":      b.Parent,
 		"created_at":  FormatTimeToISO(b.CreatedAt),
 		"modified_at": FormatTimeToISO(b.ModifiedAt),
+		"status":      b.Status,
 	}
 
 	children, err := dm.GetBlocks(userID, "entry", 1, 999999, b.ID)
