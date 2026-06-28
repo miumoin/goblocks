@@ -63,7 +63,7 @@ const Home: React.FC = () => {
 
                 if (res.status === 'success') {
                     setData((prevData) => ({ ...prevData, isSubmitted: true, isBlocked: true }));
-                    //Cookies.set('devis_request_id', res.block.id, { expires: 1/12 }); // Expires in 2 hours
+                    Cookies.set('devis_request_id', res.block.id, { expires: 1/12 }); // Expires in 2 hours
                 }
 
                 return 0;
@@ -83,53 +83,129 @@ const Home: React.FC = () => {
         <p className="lead">Just put your email address and click on Get Started.</p>
         
         {/* Email Form */}
-        <form 
-            className="mt-4 w-100 w-md-75 mx-auto" 
-            onSubmit={initDevis}
-            style={{ maxWidth: '400px' }}
-        >
-            <div className="input-group">
-                <input
-                    type="email"
-                    name="email"
-                    className="form-control form-control-lg"
-                    placeholder="Enter your email address"
-                    aria-label="Email address"
-                    required
-                    onChange={(e) => setData((prevData) => ({ ...prevData, email: e.target.value }))}
-                    disabled={data.isSubmitted || data.isBlocked}
-                />
-                <button 
-                    className="btn btn-primary btn-lg px-4" 
-                    type="submit"
-                    disabled={data.isSubmitted || data.isBlocked}
+        { !data.isBlocked ? (
+            <form 
+                className="mt-4 w-100 w-md-75 mx-auto" 
+                onSubmit={initDevis}
+                style={{ maxWidth: '400px' }}
+            >
+                <div className="input-group">
+                    <input
+                        type="email"
+                        name="email"
+                        className="form-control form-control-lg"
+                        placeholder="Enter your email address"
+                        aria-label="Email address"
+                        required
+                        onChange={(e) => setData((prevData) => ({ ...prevData, email: e.target.value }))}
+                        disabled={data.isSubmitted || data.isBlocked}
+                    />
+                    <button 
+                        className="btn btn-primary btn-lg px-4" 
+                        type="submit"
+                        disabled={data.isSubmitted || data.isBlocked}
+                    >
+                        Get Started
+                    </button>
+                </div>
+                
+                {/* Trust badges below form */}
+                <div className="mt-3 px-3 py-2 rounded" style={{ 
+                    backgroundColor: '#e7f3fe', 
+                    border: '1px solid #b6d4fe',
+                    color: '#084298',
+                    fontSize: '0.9rem'
+                }}>
+                    { data.email != '' && data.isValid ? (
+                        <span>⚠️ Please ensure your email is correct so we can deliver your quote promptly. To maintain a spam-free experience, you can submit one request every 2 hours.</span>
+                    ) : data.email.trim() != '' && !data.isValid ? (
+                        <span>❌ Oops! That doesn't look like a valid email address. Please double-check and try again.</span>
+                    ) : data.isBlocked ? (
+                        <span>🔒 You have reached the limit for submitting requests. Please try again later.</span>
+                    ) : (
+                        <span>🔒 Free, no obligation • No credit card required • Your info stays private</span>
+                    ) }
+                </div>
+                
+                <p className="text-muted small mt-2">
+                    We'll send a secure link to your phone to snap photos of your items.
+                </p>
+            </form>
+        ) : (
+            /* ================= SUCCESS + WAITING STATE ================= */
+            <div 
+                className="mt-4 w-100 w-md-75 mx-auto text-center p-4 rounded-3"
+                style={{ 
+                    maxWidth: '400px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    backdropFilter: 'blur(10px)'
+                }}
+            >
+                {/* Success Icon */}
+                <div 
+                    className="d-inline-flex align-items-center justify-content-center mb-3"
+                    style={{
+                        width: '64px',
+                        height: '64px',
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(40, 167, 69, 0.2)',
+                        border: '2px solid rgba(40, 167, 69, 0.4)'
+                    }}
                 >
-                    Get Started
-                </button>
+                    <svg 
+                        xmlns="http://www.w3.org/2000/svg" 
+                        width="32" 
+                        height="32" 
+                        fill="rgba(40, 167, 69, 1)" 
+                        viewBox="0 0 16 16"
+                    >
+                        <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
+                    </svg>
+                </div>
+
+                {/* Title */}
+                <h5 className="fw-bold text-white mb-2">
+                    Request Received!
+                </h5>
+
+                {/* Message */}
+                <p className="mb-3" style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '0.95rem', lineHeight: '1.6' }}>
+                    Thanks for your submission! We're preparing your personalized quote now. 
+                    You'll receive it in your inbox shortly — just keep an eye on your email.
+                </p>
+
+                {/* Info box */}
+                <div 
+                    className="px-3 py-2 rounded mx-auto mb-3"
+                    style={{ 
+                        backgroundColor: 'rgba(13, 202, 240, 0.1)',
+                        border: '1px solid rgba(13, 202, 240, 0.3)',
+                        color: '#0dcaf0',
+                        fontSize: '0.85rem',
+                        maxWidth: '320px'
+                    }}
+                >
+                    💡 <strong>What's next?</strong> Check your email for a secure link to upload photos of your items. 
+                    Once we have those, our AI will analyze them and connect you with trusted moving companies.
+                </div>
+
+                {/* Block explanation */}
+                <div 
+                    className="px-3 py-2 rounded mx-auto"
+                    style={{ 
+                        backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                        border: '1px solid rgba(255, 193, 7, 0.3)',
+                        color: '#ffc107',
+                        fontSize: '0.85rem',
+                        maxWidth: '320px'
+                    }}
+                >
+                    🔒 <strong>One request per day</strong> — To keep things fair and spam-free, 
+                    new submissions are locked until tomorrow. But don't worry, your quote is on its way!
+                </div>
             </div>
-            
-            {/* Trust badges below form */}
-            <div className="mt-3 px-3 py-2 rounded" style={{ 
-                backgroundColor: '#e7f3fe', 
-                border: '1px solid #b6d4fe',
-                color: '#084298',
-                fontSize: '0.9rem'
-            }}>
-                { data.email != '' && data.isValid ? (
-                    <span>⚠️ Please ensure your email is correct so we can deliver your quote promptly. To maintain a spam-free experience, you can submit one request every 2 hours.</span>
-                ) : data.email.trim() != '' && !data.isValid ? (
-                    <span>❌ Oops! That doesn't look like a valid email address. Please double-check and try again.</span>
-                ) : data.isBlocked ? (
-                    <span>🔒 You have reached the limit for submitting requests. Please try again later.</span>
-                ) : (
-                    <span>🔒 Free, no obligation • No credit card required • Your info stays private</span>
-                ) }
-            </div>
-            
-            <p className="text-muted small mt-2">
-                We'll send a secure link to your phone to snap photos of your items.
-            </p>
-        </form>
+        )}
     </main> 
 </div>
 

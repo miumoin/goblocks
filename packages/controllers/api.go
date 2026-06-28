@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/miumoin/agencybot/packages/services"
@@ -35,6 +37,8 @@ func (ac *ApiController) RegisterApiRoutes() {
 		apiGroup.GET("/devisQueue/:page", ac.GetDevisRequests)
 		apiGroup.POST("/generate/:slug", ac.GenerateQuote)
 		apiGroup.POST("/dispatch/:slug", ac.DispatchQuote)
+		apiGroup.GET("/partnerDevis/:slug", ac.GetPartnerDevis)
+		apiGroup.POST("/submitDevis/:slug", ac.SubmitDevis)
 
 		apiGroup.GET("/welcome", ac.ApiWelcome)
 	}
@@ -83,8 +87,8 @@ func (ac *ApiController) InitDevis(c *gin.Context) {
 	utils := services.NewUtilities(ac.db)
 	subject := "Your Free Moving Quote: 2-minute photo upload"
 	recipient := content.Email
-	messagePlain := fmt.Sprintf("Hi,\n\nThank you for requesting a free moving quote.\n\nTo provide you with the most accurate estimate, we need to see the items you are moving. Please open the link below on your smartphone and snap a few quick photos:\n\n👉 https://wit.works/quote/%s/upload\n\nThis process takes less than 2 minutes and requires no app download. Once we receive your photos, our team will review them and send your personalized, no-obligation quote within [e.g., 24 hours].\n\nNote: If you did not request this quote, please simply disregard this email.\n\nBest regards,\nThe Typewriting Team\ntypewriting.ai\n[Your Contact Phone Number]", block["slug"])
-	messageHTML := fmt.Sprintf("<p>Hi,</p><p>Thank you for requesting a free moving.</p><p>To provide you with the most accurate estimate, we need to see the items you are moving. Please open the link below on your smartphone and snap a few quick photos:</p><p>👉 <a href='https://wit.works/quote/%s/upload'>Upload Photos</a></p><p>This process takes less than 2 minutes and requires no app download. Once we receive your photos, our team will review them and send your personalized, no-obligation quote within [e.g., 24 hours].</p><p><strong>Note:</strong> If you did not request this quote, please simply disregard this email.</p><p>Best regards,<br>The Typewriting Team<br>typewriting.ai<br>0767842690</p>", block["slug"])
+	messagePlain := fmt.Sprintf("Hi,\n\nThank you for requesting a free moving quote.\n\nTo provide you with the most accurate estimate, we need to see the items you are moving. Please open the link below on your smartphone and snap a few quick photos:\n\n👉 https://wit.works/move/quote/%s/upload\n\nThis process takes less than 2 minutes and requires no app download. Once we receive your photos, our team will review them and send your personalized, no-obligation quote within [e.g., 24 hours].\n\nNote: If you did not request this quote, please simply disregard this email.\n\nBest regards,\nThe Wit Works Team\nwit.works\n[Your Contact Phone Number]", block["slug"])
+	messageHTML := fmt.Sprintf("<p>Hi,</p><p>Thank you for requesting a free moving.</p><p>To provide you with the most accurate estimate, we need to see the items you are moving. Please open the link below on your smartphone and snap a few quick photos:</p><p>👉 <a href='https://wit.works/move/quote/%s/upload'>Upload Photos</a></p><p>This process takes less than 2 minutes and requires no app download. Once we receive your photos, our team will review them and send your personalized, no-obligation quote within [e.g., 24 hours].</p><p><strong>Note:</strong> If you did not request this quote, please simply disregard this email.</p><p>Best regards,<br>The Wit Works Team<br>wit.works<br>0767842690</p>", block["slug"])
 	utils.SendEmail(recipient, subject, messagePlain, messageHTML)
 
 	c.JSON(http.StatusOK, gin.H{
@@ -109,6 +113,69 @@ func (ac *ApiController) GetDevis(c *gin.Context) {
 	userID := databaseManager.GetCurrentUser()
 
 	devis, err := databaseManager.GetBlock(userID, "devis", 0, slug, 0)
+	if devis != nil && err == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "success",
+			"devis":  devis,
+		})
+	} else {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+			"devis":  map[string]interface{}{},
+		})
+	}
+}
+
+func (ac *ApiController) GetPartnerDevis(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+	slug := c.Param("slug")
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil || slug == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+
+	devis, err := databaseManager.GetBlock(userID, "devis", 0, slug, 0)
+	devis["content"] = "Confidentielle"
+
+	metasUpdated := map[string]interface{}{}
+
+	// Handle both map[string]string and map[string]interface{}
+	switch metas := devis["metas"].(type) {
+	case map[string]string:
+		for key, value := range metas {
+			if key == "Address" {
+				parts := strings.Split(value, ",")
+				if len(parts) > 1 {
+					value = strings.TrimSpace(parts[len(parts)-1])
+				}
+			}
+			metasUpdated[key] = value
+		}
+	case map[string]interface{}:
+		for key, value := range metas {
+			if key == "Address" {
+				if valueStr, ok := value.(string); ok {
+					parts := strings.Split(valueStr, ",")
+					if len(parts) > 1 {
+						value = strings.TrimSpace(parts[len(parts)-1])
+					}
+				}
+			}
+			metasUpdated[key] = value
+		}
+	}
+
+	devis["metas"] = metasUpdated
+
+	fmt.Printf("GetPartnerDevis: Retrieved devis for slug '%s': %v, error: %v\n", slug, devis, err)
+
 	if devis != nil && err == nil {
 		c.JSON(http.StatusOK, gin.H{
 			"status": "success",
@@ -459,7 +526,7 @@ func (ac *ApiController) DispatchQuote(c *gin.Context) {
 		if !contains(content.Emails, email) {
 			continue
 		}
-		err := utils.SendDispatchEmail(email, devisData, fmt.Sprintf("https://localhost/quote/%s", slug))
+		err := utils.SendDispatchEmail(email, devisData, fmt.Sprintf("https://wit.works/move/quote/%s", slug))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": fmt.Sprintf("failed to send email to %s: %v", email, err)})
 			return
@@ -468,6 +535,260 @@ func (ac *ApiController) DispatchQuote(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
+	})
+}
+
+func (ac *ApiController) SubmitDevis(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+	slug := c.Param("slug")
+
+	// 1. Bind the incoming partner quote payload
+	var content struct {
+		CompanyName    string  `json:"companyName"`
+		CompanySiret   string  `json:"companySiret"`
+		CompanyEmail   string  `json:"companyEmail"`
+		CompanyPhone   string  `json:"companyPhone"`
+		TotalM3        float64 `json:"totalM3"`
+		MovePrice      float64 `json:"movePrice"`
+		MaterialsTotal float64 `json:"materialsTotal"`
+		GrandTotal     float64 `json:"grandTotal"`
+		Materials      []struct {
+			ID        string  `json:"id"`
+			Name      string  `json:"name"`
+			Quantity  int     `json:"quantity"`
+			UnitPrice float64 `json:"unitPrice"`
+		} `json:"materials"`
+	}
+
+	if err := c.BindJSON(&content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail", "error": "invalid JSON payload"})
+		return
+	}
+
+	// 2. Validate required fields
+	if content.CompanyName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail", "error": "company name is required"})
+		return
+	}
+
+	// Validate SIRET (14 digits)
+	siretClean := strings.ReplaceAll(content.CompanySiret, " ", "")
+	if len(siretClean) != 14 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail", "error": "SIRET must be exactly 14 digits"})
+		return
+	}
+	for _, ch := range siretClean {
+		if ch < '0' || ch > '9' {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "fail", "error": "SIRET must contain only digits"})
+			return
+		}
+	}
+
+	// 3. Initialize database manager
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"status": "fail",
+			"error":  "failed to initialize database manager",
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+
+	// 4. Fetch the original devis to get customer info
+	devis, err := databaseManager.GetBlock(userID, "devis", 0, slug, 0)
+	if devis == nil || err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "fail", "error": "devis request not found"})
+		return
+	}
+
+	var devisID int64
+	if id, ok := devis["id"].(int64); ok {
+		devisID = id
+	} else if idFloat, ok := devis["id"].(float64); ok {
+		devisID = int64(idFloat)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "invalid devis ID type"})
+		return
+	}
+
+	var customerEmail = devis["title"].(string) // Assuming the title contains the customer's email
+
+	blockData := map[string]interface{}{
+		"type":    "partnerDevis",
+		"title":   content.CompanyEmail,
+		"content": "",
+		"parent":  devisID,
+	}
+
+	block, err := databaseManager.AddBlock(userID, blockData, "")
+
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+			"block":  nil,
+		})
+		return
+	}
+
+	var partnerDevisID int64
+	if id, ok := block["id"].(int64); ok {
+		partnerDevisID = id
+	} else if idFloat, ok := block["id"].(float64); ok {
+		partnerDevisID = int64(idFloat)
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "invalid devis ID type in database"})
+		return
+	}
+
+	databaseManager.AddMeta("partnerDevis", partnerDevisID, "CompanyName", content.CompanyName)
+	databaseManager.AddMeta("partnerDevis", partnerDevisID, "CompanySiret", content.CompanySiret)
+	databaseManager.AddMeta("partnerDevis", partnerDevisID, "CompanyPhone", content.CompanyPhone)
+	databaseManager.AddMeta("partnerDevis", partnerDevisID, "CompanyEmail", content.CompanyEmail)
+	databaseManager.AddMeta("partnerDevis", partnerDevisID, "TotalM3", content.TotalM3)
+	databaseManager.AddMeta("partnerDevis", partnerDevisID, "MovePrice", content.MovePrice)
+	databaseManager.AddMeta("partnerDevis", partnerDevisID, "MaterialsTotal", content.MaterialsTotal)
+	databaseManager.AddMeta("partnerDevis", partnerDevisID, "GrandTotal", content.GrandTotal)
+	materialsJSON, _ := json.Marshal(content.Materials)
+	databaseManager.AddMeta("partnerDevis", partnerDevisID, "Materials", string(materialsJSON))
+
+	fmt.Printf("Partner %s (SIRET: %s) submitting quote for devis ID %v to customer %s\n",
+		content.CompanyName, siretClean, partnerDevisID, devis["title"])
+
+	// 6. Build the quote data structure for PDF and email
+	utils := services.NewUtilities(ac.db)
+
+	// Convert materials to the expected format
+	var materials []services.Material
+	for i, m := range content.Materials {
+		materials = append(materials, services.Material{
+			ID:        i + 1,
+			Name:      m.Name,
+			Quantity:  m.Quantity,
+			UnitPrice: m.UnitPrice,
+		})
+	}
+
+	devisData := services.PartnerDevisData{
+		Materials:      materials,
+		TotalM3:        content.TotalM3,
+		EstimatedPrice: content.GrandTotal,
+		DevisNumber:    fmt.Sprintf("PARTNER-%s-%d", siretClean, partnerDevisID),
+		Date:           time.Now(),
+		// Partner-specific info for the PDF
+		PartnerCompanyName: content.CompanyName,
+		PartnerSiret:       siretClean,
+		PartnerPhone:       content.CompanyPhone,
+		PartnerEmail:       content.CompanyEmail,
+		MaterialsTotal:     content.MaterialsTotal,
+		MovePrice:          content.MovePrice,
+	}
+
+	// 8. Generate PDF of the partner's quote
+	pdfBytes, err := utils.GeneratePartnerDevisPDF(devisData)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "fail",
+			"error":  fmt.Sprintf("failed to generate PDF: %v", err),
+		})
+		return
+	}
+
+	// 9. Send email to the customer with the partner's quote attached
+	subject := fmt.Sprintf("New Offer from %s - Estimate N°%s",
+		content.CompanyName, devisData.DevisNumber)
+
+	messagePlain := fmt.Sprintf(`Hello,
+
+A professional moving company has sent you an offer for your moving request.
+
+Offer Details:
+- Company: %s
+- SIRET: %s
+- Phone: %s
+- Email: %s
+- Volume: %.2f m³
+- Total Price: €%.2f
+
+You will find the detailed quote attached to this email.
+
+Please feel free to contact the company directly for any questions.
+
+Best regards,
+The Wit Works Team
+149 Avenue du Maine, Paris 75014`,
+		content.CompanyName,
+		siretClean,
+		content.CompanyPhone,
+		content.CompanyEmail,
+		content.TotalM3,
+		content.GrandTotal,
+	)
+
+	messageHTML := fmt.Sprintf(`
+		<div style="font-family: Arial, sans-serif; color: #333;">
+			<h2 style="color: #1e3c78;">Hello,</h2>
+			<p>A professional moving company has sent you a <strong>new offer</strong> for your moving request.</p>
+			
+			<div style="background-color: #f0f5ff; padding: 15px; border-left: 4px solid #1e3c78; margin: 20px 0;">
+				<h3 style="margin-top: 0; color: #1e3c78;">Offer Details</h3>
+				<p><strong>Company:</strong> %s</p>
+				<p><strong>SIRET:</strong> %s</p>
+				<p><strong>Phone:</strong> <a href="tel:%s">%s</a></p>
+				<p><strong>Email:</strong> <a href="mailto:%s">%s</a></p>
+				<p><strong>Volume:</strong> %.2f m³</p>
+				<p><strong>Total Price:</strong> <span style="color: #1e3c78; font-size: 18px; font-weight: bold;">€%.2f</span></p>
+			</div>
+			
+			<p>You will find the detailed quote attached to this email.</p>
+			<p>Please feel free to contact the company directly for any questions.</p>
+			
+			<p>Best regards,<br>
+			<strong>The Wit Works Team</strong><br>
+			149 Avenue du Maine, Paris 75014</p>
+		</div>
+	`,
+		content.CompanyName,
+		siretClean,
+		content.CompanyPhone, content.CompanyPhone,
+		content.CompanyEmail, content.CompanyEmail,
+		content.TotalM3,
+		content.GrandTotal,
+	)
+
+	pdfAttachment := services.EmailAttachment{
+		Filename:    fmt.Sprintf("devis-%s-%s.pdf", content.CompanyName, devisData.DevisNumber),
+		ContentType: "application/pdf",
+		Content:     pdfBytes,
+	}
+
+	err = utils.SendEmailWithAttachments(
+		customerEmail,
+		subject,
+		messagePlain,
+		messageHTML,
+		[]services.EmailAttachment{pdfAttachment},
+		content.CompanyEmail,
+		content.CompanyName,
+	)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "fail",
+			"error":  fmt.Sprintf("failed to send quote to customer: %v", err),
+		})
+		return
+	}
+
+	// Only send if we have a partner email stored (you may want to add this to the payload)
+	// For now, skip partner confirmation unless you add partnerEmail to the submission
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":      "success",
+		"devisNumber": devisData.DevisNumber,
+		"message":     fmt.Sprintf("Quote successfully sent to %s", customerEmail),
 	})
 }
 

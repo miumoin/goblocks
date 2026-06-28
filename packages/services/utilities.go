@@ -144,6 +144,20 @@ type DevisData struct {
 	Date           time.Time
 }
 
+type PartnerDevisData struct {
+	Materials          []Material
+	TotalM3            float64
+	EstimatedPrice     float64
+	DevisNumber        string
+	Date               time.Time
+	PartnerCompanyName string
+	PartnerSiret       string
+	PartnerPhone       string
+	PartnerEmail       string
+	MaterialsTotal     float64
+	MovePrice          float64
+}
+
 // MistralResponse defines the structure of Mistral's response
 type MistralResponse struct {
 	Choices []struct {
@@ -554,7 +568,7 @@ func (u *Utilities) SendEmail(recipient, subject, messagePlain, messageHTML stri
 	return fmt.Errorf("failed to send email, status code: %d", resp.StatusCode)
 }
 
-func (u *Utilities) SendEmailWithAttachments(recipient, subject, messagePlain, messageHTML string, attachments []EmailAttachment) error {
+func (u *Utilities) SendEmailWithAttachments(recipient, subject, messagePlain, messageHTML string, attachments []EmailAttachment, replyToEmail string, replyToName string) error {
 	apiKey := os.Getenv("MAILJET_API_KEY")
 	apiSecret := os.Getenv("MAILJET_API_SECRET")
 	senderEmail := os.Getenv("MAILJET_SENDER_EMAIL")
@@ -572,6 +586,17 @@ func (u *Utilities) SendEmailWithAttachments(recipient, subject, messagePlain, m
 		"Subject":  subject,
 		"TextPart": messagePlain,
 		"HTMLPart": messageHTML,
+	}
+
+	// Add Reply-To via Headers if provided
+	if replyToEmail != "" {
+		replyToValue := replyToEmail
+		if replyToName != "" {
+			replyToValue = fmt.Sprintf("%s <%s>", replyToName, replyToEmail)
+		}
+		message["Headers"] = map[string]string{
+			"Reply-To": replyToValue,
+		}
 	}
 
 	// Add attachments if any
@@ -1267,6 +1292,8 @@ The Wit Works Team
 		messagePlain,
 		messageHTML,
 		[]EmailAttachment{pdfAttachment},
+		"",
+		"",
 	)
 	if err != nil {
 		return fmt.Errorf("failed to send estimate email: %w", err)
@@ -1350,6 +1377,8 @@ L'équipe Wit Works
 		messagePlain,
 		messageHTML,
 		[]EmailAttachment{pdfAttachment},
+		"",
+		"",
 	)
 	if err != nil {
 		return fmt.Errorf("failed to send dispatch email: %w", err)
@@ -1479,6 +1508,178 @@ func (u *Utilities) GenerateDevisPDF(data DevisData) ([]byte, error) {
 	pdf.SetFont("DejaVu", "", 10)
 	pdf.SetTextColor(80, 80, 80)
 	pdf.CellFormat(190, 6, "President, Wit Works", "", 1, "R", false, 0, "")
+
+	// Write to buffer
+	var buf bytes.Buffer
+	if err := pdf.Output(&buf); err != nil {
+		return nil, fmt.Errorf("failed to generate PDF: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// GeneratePartnerDevisPDF creates a PDF document for a partner's quote and returns it as bytes
+func (u *Utilities) GeneratePartnerDevisPDF(data PartnerDevisData) ([]byte, error) {
+	// Create PDF
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.AddPage()
+	pdf.SetAutoPageBreak(true, 15)
+
+	// ============================================
+	// ADD UNICODE FONTS
+	// ============================================
+	pdf.AddUTF8Font("DejaVu", "", "fonts/DejaVuSans.ttf")
+	pdf.AddUTF8Font("DejaVu", "B", "fonts/DejaVuSans-Bold.ttf")
+	pdf.AddUTF8Font("DejaVu", "I", "fonts/DejaVuSans-Oblique.ttf")
+
+	// ============================================
+	// HEADER - Partner Company Info
+	// ============================================
+	pdf.SetFont("DejaVu", "B", 28)
+	pdf.SetTextColor(30, 60, 120)
+	pdf.CellFormat(190, 15, data.PartnerCompanyName, "", 1, "C", false, 0, "")
+
+	pdf.SetFont("DejaVu", "", 11)
+	pdf.SetTextColor(80, 80, 80)
+	if data.PartnerSiret != "" {
+		pdf.CellFormat(190, 7, fmt.Sprintf("SIRET: %s", data.PartnerSiret), "", 1, "C", false, 0, "")
+	}
+	if data.PartnerPhone != "" {
+		pdf.CellFormat(190, 6, fmt.Sprintf("Phone: %s", data.PartnerPhone), "", 1, "C", false, 0, "")
+	}
+	if data.PartnerEmail != "" {
+		pdf.CellFormat(190, 6, fmt.Sprintf("Email: %s", data.PartnerEmail), "", 1, "C", false, 0, "")
+	}
+
+	pdf.SetDrawColor(30, 60, 120)
+	pdf.SetLineWidth(0.5)
+	pdf.Line(10, pdf.GetY()+3, 200, pdf.GetY()+3)
+	pdf.Ln(8)
+
+	// ============================================
+	// DOCUMENT INFO
+	// ============================================
+	pdf.SetFont("DejaVu", "B", 14)
+	pdf.SetTextColor(30, 60, 120)
+	pdf.CellFormat(190, 8, "MOVING QUOTE", "", 1, "C", false, 0, "")
+	pdf.Ln(3)
+
+	pdf.SetFont("DejaVu", "", 10)
+	pdf.SetTextColor(50, 50, 50)
+	pdf.CellFormat(95, 6, fmt.Sprintf("Quote N°: %s", data.DevisNumber), "", 0, "L", false, 0, "")
+	pdf.CellFormat(95, 6, fmt.Sprintf("Date: %s", data.Date.Format("January 2, 2006")), "", 1, "R", false, 0, "")
+	pdf.Ln(5)
+
+	// ============================================
+	// MATERIALS TABLE (5 columns)
+	// ============================================
+	pdf.SetFillColor(30, 60, 120)
+	pdf.SetTextColor(255, 255, 255)
+	pdf.SetFont("DejaVu", "B", 10)
+
+	// Column widths: ID(15) + Material(85) + Qty(25) + Unit Price(30) + Price(35) = 190
+	pdf.CellFormat(15, 8, "ID", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(85, 8, "Material", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(25, 8, "Qty", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(30, 8, "Unit Price", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(35, 8, "Price", "1", 1, "C", true, 0, "")
+
+	pdf.SetTextColor(50, 50, 50)
+	pdf.SetFont("DejaVu", "", 9)
+	fill := false
+	for _, mat := range data.Materials {
+		if fill {
+			pdf.SetFillColor(240, 245, 255)
+		} else {
+			pdf.SetFillColor(255, 255, 255)
+		}
+
+		// Calculate row price
+		rowPrice := float64(mat.Quantity) * mat.UnitPrice
+
+		pdf.CellFormat(15, 7, fmt.Sprintf("%d", mat.ID), "1", 0, "C", true, 0, "")
+		pdf.CellFormat(85, 7, mat.Name, "1", 0, "L", true, 0, "")
+		pdf.CellFormat(25, 7, fmt.Sprintf("%d", mat.Quantity), "1", 0, "C", true, 0, "")
+		pdf.CellFormat(30, 7, fmt.Sprintf("€%.2f", mat.UnitPrice), "1", 0, "R", true, 0, "")
+		pdf.CellFormat(35, 7, fmt.Sprintf("€%.2f", rowPrice), "1", 1, "R", true, 0, "")
+
+		fill = !fill
+	}
+
+	pdf.Ln(8)
+
+	// ============================================
+	// SUMMARY
+	// ============================================
+	pdf.SetFont("DejaVu", "B", 11)
+	pdf.SetTextColor(30, 60, 120)
+	pdf.CellFormat(140, 7, "Estimated Volume:", "", 0, "R", false, 0, "")
+	pdf.SetFont("DejaVu", "", 11)
+	pdf.SetTextColor(50, 50, 50)
+	pdf.CellFormat(50, 7, fmt.Sprintf("%.2f m³", data.TotalM3), "", 1, "L", false, 0, "")
+
+	pdf.SetFont("DejaVu", "B", 11)
+	pdf.SetTextColor(30, 60, 120)
+	pdf.CellFormat(140, 7, "Materials Total:", "", 0, "R", false, 0, "")
+	pdf.SetFont("DejaVu", "", 11)
+	pdf.SetTextColor(50, 50, 50)
+	pdf.CellFormat(50, 7, fmt.Sprintf("€%.2f", data.MaterialsTotal), "", 1, "L", false, 0, "")
+
+	pdf.SetFont("DejaVu", "B", 11)
+	pdf.SetTextColor(30, 60, 120)
+	pdf.CellFormat(140, 7, "Move Price (Labor, Transport):", "", 0, "R", false, 0, "")
+	pdf.SetFont("DejaVu", "", 11)
+	pdf.SetTextColor(50, 50, 50)
+	pdf.CellFormat(50, 7, fmt.Sprintf("€%.2f", data.MovePrice), "", 1, "L", false, 0, "")
+
+	// Grand Total with separator
+	pdf.SetDrawColor(30, 60, 120)
+	pdf.SetLineWidth(0.3)
+	pdf.Line(50, pdf.GetY()+2, 200, pdf.GetY()+2)
+	pdf.Ln(4)
+
+	pdf.SetFont("DejaVu", "B", 13)
+	pdf.SetTextColor(30, 60, 120)
+	pdf.CellFormat(140, 8, "Total Quote:", "", 0, "R", false, 0, "")
+	pdf.SetFont("DejaVu", "B", 13)
+	pdf.SetTextColor(200, 80, 0) // Orange for emphasis
+	pdf.CellFormat(50, 8, fmt.Sprintf("€%.2f", data.EstimatedPrice), "", 1, "L", false, 0, "")
+
+	pdf.Ln(10)
+
+	// ============================================
+	// DISCLAIMER
+	// ============================================
+	pdf.SetDrawColor(200, 200, 200)
+	pdf.SetLineWidth(0.2)
+	pdf.Line(10, pdf.GetY(), 200, pdf.GetY())
+	pdf.Ln(5)
+
+	pdf.SetFont("DejaVu", "I", 9)
+	pdf.SetTextColor(100, 100, 100)
+	disclaimer := "This quote was prepared by the above-mentioned moving company based on the information and photos provided. " +
+		"For any questions or to confirm your booking, please contact the company directly using the details at the top of this document."
+
+	pdf.MultiCell(190, 5, disclaimer, "", "L", false)
+	pdf.Ln(10)
+
+	// ============================================
+	// SIGNATURE - Partner Company
+	// ============================================
+	pdf.SetFont("DejaVu", "B", 11)
+	pdf.SetTextColor(30, 60, 120)
+	pdf.CellFormat(190, 6, data.PartnerCompanyName, "", 1, "R", false, 0, "")
+	pdf.SetFont("DejaVu", "", 10)
+	pdf.SetTextColor(80, 80, 80)
+	if data.PartnerSiret != "" {
+		pdf.CellFormat(190, 6, fmt.Sprintf("SIRET: %s", data.PartnerSiret), "", 1, "R", false, 0, "")
+	}
+	if data.PartnerPhone != "" {
+		pdf.CellFormat(190, 6, fmt.Sprintf("Phone: %s", data.PartnerPhone), "", 1, "R", false, 0, "")
+	}
+	if data.PartnerEmail != "" {
+		pdf.CellFormat(190, 6, fmt.Sprintf("Email: %s", data.PartnerEmail), "", 1, "R", false, 0, "")
+	}
 
 	// Write to buffer
 	var buf bytes.Buffer
