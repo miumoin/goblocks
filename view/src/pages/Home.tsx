@@ -171,8 +171,8 @@ const Home: React.FC = () => {
 
                 {/* Message */}
                 <p className="mb-3" style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: '0.95rem', lineHeight: '1.6' }}>
-                    Thanks for your submission! We're preparing your personalized quote now. 
-                    You'll receive it in your inbox shortly — just keep an eye on your email.
+                    Thank you! We’ve sent a secure link to your email so you can upload photos of your belongings. 
+                    Please check your inbox (and spam folder) to complete your quote request.
                 </p>
 
                 {/* Info box */}

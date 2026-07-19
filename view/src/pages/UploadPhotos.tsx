@@ -204,7 +204,7 @@ export default function MobilePhotoCapture() {
     });
 
     try {
-      const response = await fetch('/api/devis/' + data.slug + '/upload', {
+      const response = await fetch(App.api_base + '/devis/' + data.slug + '/upload', {
         method: 'POST',
         headers: {
               'X-Vuedoo-Domain': App.domain,

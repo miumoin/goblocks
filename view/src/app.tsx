@@ -14,16 +14,14 @@ import Manage from './pages/Manage';
 const App: React.FC = () => {
     return (
         <>
-            <Router>
-                <Routes>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/quote/:slug/upload" element={<UploadPhotos />} />
-                    <Route path="/quote/:slug" element={<Entry />} />
-                    <Route path="/entries/:pageNo" element={<Entries />} />
-                    <Route path="/entry/:slug" element={<Manage />} />
-                    <Route path="*" element={<NotFound />} />
-                </Routes>
-            </Router>
+            <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/quote/:slug/upload" element={<UploadPhotos />} />
+                <Route path="/quote/:slug" element={<Entry />} />
+                <Route path="/entries/:pageNo" element={<Entries />} />
+                <Route path="/entry/:slug" element={<Manage />} />
+                <Route path="*" element={<NotFound />} />
+            </Routes>
         </>
     );
 }
