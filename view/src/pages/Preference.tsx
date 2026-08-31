@@ -37,7 +37,7 @@ const Preference: React.FC = () => {
     const [data, setData] = useState<dataState>({
         accessKey: '',
         slug: slug,
-        workspace: { id: '', slug: '', title: '', metas: { prompt: '', description: '', logo: '' } },
+        workspace: { id: '', slug: '', title: '', metas: { description: '', dimension: '1920x1080', showTime: 60, genre: 'action', visualStyle: 'cinematic', tone: 'happy', cinematography: 'hollywood' } },
         file: null,
         isLoaded: false,
         isSubmitted: false,
@@ -284,6 +284,172 @@ const Preference: React.FC = () => {
                                         </textarea>
                                     </div>
                                 </div>
+
+                                <div className="row my-3">
+                                    <div className="col-md-4">
+                                        <label className="mb-0">Dimension</label>
+                                    </div>
+                                    <div className="col-md-8">
+                                        <select 
+                                            className="form-select"
+                                            value={(data.workspace.metas.dimension != undefined ? data.workspace.metas.dimension : '1920x1080')}
+                                            onChange={(e) => setData((prevData) => ({
+                                                ...prevData,
+                                                workspace: {
+                                                    ...prevData.workspace,
+                                                    metas: {
+                                                        ...prevData.workspace.metas,
+                                                        dimension: e.target.value
+                                                    }
+                                                }
+                                            }))}
+                                        >
+                                            <option value="">Select dimension</option>
+                                            <option value="1920x1080">1920x1080</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="row my-3">
+                                    <div className="col-md-4">
+                                        <label className="mb-0">Total show time</label>
+                                    </div>
+                                    <div className="col-md-8">
+                                        <select 
+                                            className="form-select"
+                                            value={(data.workspace.metas.showTime != undefined ? data.workspace.metas.showTime : '60')}
+                                            onChange={(e) => setData((prevData) => ({
+                                                ...prevData,
+                                                workspace: {
+                                                    ...prevData.workspace,
+                                                    metas: {
+                                                        ...prevData.workspace.metas,
+                                                        showTime: e.target.value
+                                                    }
+                                                }
+                                            }))}
+                                        >
+                                            <option value="">Select duration</option>
+                                            <option value="60">1 minute</option>
+                                            <option value="180">3 minutes</option>
+                                            <option value="300">5 minutes</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="row my-3">
+                                    <div className="col-md-4">
+                                        <label className="mb-0">Genre</label>
+                                    </div>
+                                    <div className="col-md-8">
+                                        <select 
+                                            className="form-select"
+                                            value={(data.workspace.metas.genre != undefined ? data.workspace.metas.genre : 'action')}
+                                            onChange={(e) => setData((prevData) => ({
+                                                ...prevData,
+                                                workspace: {
+                                                    ...prevData.workspace,
+                                                    metas: {
+                                                        ...prevData.workspace.metas,
+                                                        genre: e.target.value
+                                                    }
+                                                }
+                                            }))}
+                                        >
+                                            <option value="">Select genre</option>
+                                            <option value="action">Action</option>
+                                            <option value="thriller">Thriller</option>
+                                            <option value="drama">Drama</option>
+                                            <option value="comedy">Comedy</option>
+                                            <option value="romance">Romance</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="row my-3">
+                                    <div className="col-md-4">
+                                        <label className="mb-0">Visual style</label>
+                                    </div>
+                                    <div className="col-md-8">
+                                        <select 
+                                            className="form-select"
+                                            value={(data.workspace.metas.visualStyle != undefined ? data.workspace.metas.visualStyle : 'cinematic')}
+                                            onChange={(e) => setData((prevData) => ({
+                                                ...prevData,
+                                                workspace: {
+                                                    ...prevData.workspace,
+                                                    metas: {
+                                                        ...prevData.workspace.metas,
+                                                        visualStyle: e.target.value
+                                                    }
+                                                }
+                                            }))}
+                                        >
+                                            <option value="">Select visual style</option>
+                                            <option value="cinematic">Cinematic</option>
+                                            <option value="documentary">Documentary</option>
+                                            <option value="animated">Animated</option>
+                                            <option value="minimalist">Minimalist</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="row my-3">
+                                    <div className="col-md-4">
+                                        <label className="mb-0">Tone</label>
+                                    </div>
+                                    <div className="col-md-8">
+                                        <select 
+                                            className="form-select"
+                                            value={(data.workspace.metas.tone != undefined ? data.workspace.metas.tone : 'happy')}
+                                            onChange={(e) => setData((prevData) => ({
+                                                ...prevData,
+                                                workspace: {
+                                                    ...prevData.workspace,
+                                                    metas: {
+                                                        ...prevData.workspace.metas,
+                                                        tone: e.target.value
+                                                    }
+                                                }
+                                            }))}
+                                        >
+                                            <option value="">Select tone</option>
+                                            <option value="happy">Happy</option>
+                                            <option value="sad">Sad</option>
+                                            <option value="neutral">Neutral</option>
+                                            <option value="intense">Intense</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="row my-3">
+                                    <div className="col-md-4">
+                                        <label className="mb-0">Cinematography style</label>
+                                    </div>
+                                    <div className="col-md-8">
+                                        <select 
+                                            className="form-select"
+                                            value={(data.workspace.metas.cinematography != undefined ? data.workspace.metas.cinematography : 'hollywood')}
+                                            onChange={(e) => setData((prevData) => ({
+                                                ...prevData,
+                                                workspace: {
+                                                    ...prevData.workspace,
+                                                    metas: {
+                                                        ...prevData.workspace.metas,
+                                                        cinematography: e.target.value
+                                                    }
+                                                }
+                                            }))}
+                                        >
+                                            <option value="">Select cinematography style</option>
+                                            <option value="hollywood">Hollywood</option>
+                                            <option value="european">European Arthouse</option>
+                                            <option value="indie">Indie</option>
+                                            <option value="naturalistic">Naturalistic</option>
+                                        </select>
+                                    </div>
+                                </div>
+
                                 <div className="row my-3">
                                     <div className="col-md-12" style={{ textAlign: 'right' }}>
                                         <button className="btn btn-primary" onClick={saveWorkspace} disabled={data.isSubmitted && data.isValid}>Save</button>

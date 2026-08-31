@@ -226,7 +226,7 @@ type Block struct {
 
 func (dm *DatabaseManager) AddBlock(userID int64, block map[string]interface{}, slug string) (map[string]interface{}, error) {
 	if slug == "" {
-		slug = NewSlug(15)
+		slug = dm.NewSlug(15)
 	}
 
 	var existingID int
@@ -294,7 +294,7 @@ func toInt64(v interface{}) int64 {
 	return 0 // fallback if nil or unconvertible
 }
 
-func NewSlug(n int) string {
+func (dm *DatabaseManager) NewSlug(n int) string {
 	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, n)
@@ -452,5 +452,10 @@ func (dm *DatabaseManager) GetMetas(id int64, parent string, metaKeys []string) 
 
 func (dm *DatabaseManager) DeleteBlock(id int64) error {
 	_, err := dm.db.Exec("UPDATE blocks SET status = 0 WHERE id = ?", id)
+	return err
+}
+
+func (dm *DatabaseManager) DeleteBlocksByParent(userID int64, blockType string, parentID int64) error {
+	_, err := dm.db.Exec("UPDATE blocks SET status = 0 WHERE author = ? AND type = ? AND parent = ?", userID, blockType, parentID)
 	return err
 }

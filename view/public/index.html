@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Typewriting multi-agent system - complex task agent builder</title>
-    <meta name="description" content="An intelligent feedback tool that listens, asks follow-up questions, identifies key information, and explains to help customers better understand your service or product.">
-    <meta name="keywords" content="business communication, AI chatbot, email management, generative AI, inbox automation, smart replies, AI assistant, automated responses, chat-based AI, business AI tools, reduce email overload, AI customer support, smart business chat, enterprise AI, document-based AI replies">
-    <meta property="og:image" content="https://typewriting.ai/Typewriting-logo.jpg">
-    <link rel="canonical" href="https://ask.typewriting.ai">
+    <title>Wit Works Studio // AI Film Creation</title>
+    <meta name="description" content="Wit Works Studio is a new creative workflow for making films from scratch. Turn an idea into a complete film with AI-powered storytelling, scenes, characters and production.">
+    <meta name="keywords" content="AI film creation, AI filmmaking, AI movie maker, AI film studio, AI video creation, create films with AI, AI storytelling, AI screenplay, AI storyboarding, AI cinematography, AI scene generation, filmmaking AI, generative AI filmmaking, AI film production, Wit Works Studio">
+    <meta property="og:image" content="https://wit.works/witworks-logo.jpg">
+    <link rel="canonical" href="https://wit.works/studio">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 128 128%22><text y=%221.2em%22 font-size=%2296%22>⬛</text><text y=%221.3em%22 x=%220.2em%22 font-size=%2276%22 fill=%22%23fff%22>tw</text></svg>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <% if (htmlWebpackPlugin.options.meta) { %>
@@ -19,8 +19,8 @@
     <script>
         let App = { 
             domain: window.location.host, 
-            base: window.location.origin, 
-            api_base: window.location.origin + '/api',
+            base: window.location.origin + ( window.location.host.indexOf('wit.works') > -1 ? '/studio' : ''), 
+            api_base: window.location.origin + ( window.location.host.indexOf('wit.works') > -1 ? '/studio' : '') + '/api',
             google_client_id: '<%= htmlWebpackPlugin.options.google_client_id %>',
         };
     </script>

@@ -18,20 +18,18 @@ import NotFound from './pages/NotFound';
 const App: React.FC = () => {
     return (
         <>
-            <Router>
-                <Routes>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/verify" element={<Verify />} />
-                    <Route path="/organization/new" element={<NewOrganization />} />
-                    <Route path="/organization/:slug" element={<Organization />} />
-                    <Route path="/organization/:slug/knowledge" element={<Knowledge />} />
-                    <Route path="/organization/:slug/preference" element={<Preference />} />
-                    <Route path="/organization/:slug/thread/:threadSlug" element={<Thread />} />
-                    <Route path="/:slug" element={<Agent />} />
-                    <Route path="*" element={<NotFound />} />
-                </Routes>
-            </Router>
+            <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/verify" element={<Verify />} />
+                <Route path="/organization/new" element={<NewOrganization />} />
+                <Route path="/organization/:slug" element={<Organization />} />
+                <Route path="/organization/:slug/knowledge" element={<Knowledge />} />
+                <Route path="/organization/:slug/preference" element={<Preference />} />
+                <Route path="/organization/:slug/thread/:threadSlug" element={<Thread />} />
+                <Route path="/:slug" element={<Agent />} />
+                <Route path="*" element={<NotFound />} />
+            </Routes>
         </>
     );
 }

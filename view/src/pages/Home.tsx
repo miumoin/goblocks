@@ -238,270 +238,58 @@ const Home: React.FC = () => {
     ): (
         <>
             <Header />
-            <div className="cover-container d-flex h-100 p-3 mx-auto flex-column" style={{minHeight: '70vh', maxWidth: '44em', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', textAlign: 'center'}}>
-                <main role="main" className="inner cover">
-                    <h1 className="cover-heading">Agents, Made Intelligent.</h1>
-                    <p className="lead">A smarter way to orchestrate agents—automatically choosing the optimal workflow for any request.</p>
-                    <p className="lead mt-3">
-                        <a href={App.base + '/login'} className="btn btn-lg btn-primary">Get started</a>
-                    </p>
-                </main> 
-            </div>
-
-            <hr/>
-
-            <section className="py-5">
-                <div className="container">
-                    <div className="row justify-content-center">
-                        <div className="col-12">
-                            <h2 className="text-center mb-4">See it in action</h2>
-                            <div style={{ 
-                                position: 'relative', 
-                                paddingTop: '56.25%', 
-                                width: '100%',
-                                borderRadius: '4px',
-                                backgroundColor: '#f8f9fa',
-                                boxShadow: '0 0 20px rgba(255,255,255,0.2)'
-                            }}>
-                                <iframe
-                                    src="https://www.youtube.com/embed/8LBxvMnRkNA?si=cPodDgBanYw0QmUL"
-                                    title="Typewriting AI Demo"
-                                    allowFullScreen
-                                    frameBorder="0"
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                    style={{
-                                        position: 'absolute',
-                                        top: 0,
-                                        left: 0,
-                                        width: '100%',
-                                        height: '100%',
-                                        objectFit: 'cover'
-                                    }}
-                                ></iframe>
-                            </div>
+            <div className="container py-5">
+                <div className="row justify-content-center">
+                    <div className="col-lg-8">
+                        
+                        <div className="mb-4">
+                            <p className="text-success mb-1">// SYSTEM BOOT...</p>
+                            <p className="text-success mb-1">// LOADING AI_MODULES... [OK]</p>
+                            <p className="text-success mb-0">// MOUNTING WORKSPACE... [OK]</p>
                         </div>
+                        
+                        <hr className="border-secondary"></hr>
+
+                        <h1 className="text-info display-5 fw-bold mb-4">&gt; WIT WORKS STUDIO</h1>
+
+                        <p className="mb-3">
+                            <span className="text-primary">const</span> <span className="text-warning">product</span> = <span className="text-danger">"AI Film Creation Software"</span>;
+                        </p>
+
+                        <div className="bg-dark p-3 rounded border border-secondary mb-4">
+                            <p className="text-success mb-1">/*</p>
+                            <p className="text-success mb-1"> * CORE DIRECTIVE:</p>
+                            <p className="text-success mb-1"> * Reinventing the film creation workflow digitally</p>
+                            <p className="text-success mb-1"> * from ZERO to FINAL_FILM.</p>
+                            <p className="text-success mb-0"> */</p>
+                        </div>
+
+                        <div className="mb-4">
+                            <p className="mb-2">
+                                <span className="text-warning">&gt;</span> <span className="text-primary">INITIATE</span> <span className           ="text-info">creative_workflow</span>(
+                            </p>
+                            <ul className="list-unstyled ps-4 mb-2">
+                                <li className="text-danger">"scratch",</li>
+                                <li className="text-danger">"shot_division",</li>
+                                <li className="text-danger">"shoot_plan"</li>
+                            </ul>
+                            <p className="mb-0">);</p>
+                        </div>
+
+                        <div className="border-start border-info border-4 bg-dark p-3 rounded-end mb-4">
+                            <p className="text-success mb-1">// OUTPUT: All in a <span className="text-danger">single workspace</span>.</p>
+                            <p className="text-success mb-0">// STATUS: No context switching. Just pure creation.</p>
+                        </div>
+
+                        <hr className="border-secondary"></hr>
+                        
+                        <p className="mb-0">
+                            <span className="text-warning">&gt;</span> AWAITING_USER_INPUT <span className="bg-light text-black px-1">█</span>
+                        </p>
+
                     </div>
                 </div>
-            </section>
-
-            <hr/>
-            
-            <section className="letter-section py-5">
-                <div className="container">
-                    <div className="row justify-content-center">
-                        <div className="col-lg-8">
-                            <h2 className="text-center mb-5 fw-bold">How Humans Adapt — and Why Agent Platforms Should Too.</h2>
-                            
-                            <div className="letter-content" style={{ fontSize: '1.2rem', animation: 'fadeIn 1s ease-in' }}>
-                                <p className="lead fw-bold mb-4" style={{ fontSize: '1.4rem' }}>
-                                    Hi,
-                                </p>
-
-                                <p>Every day, humans naturally reinvent the way they work.</p>
-    
-                                <p className="highlight" style={{ fontSize: '1.3rem', fontWeight: 500, textDecoration: 'underline' }}>We don’t follow a single, rigid workflow for every task—we adapt.</p>
-                                
-                                <p>If we’re planning a trip, we compare options, check schedules, talk to people, and make decisions in a flexible, evolving sequence. When we solve a technical issue, we jump between tools, rethink our approach, or consult others. Even something simple—like cooking a new recipe—changes depending on what ingredients we have and what we discover along the way.</p>
-
-                                <p className="highlight" style={{ fontSize: '1.3rem', fontWeight: 500, textDecoration: 'underline' }}>Humans don’t operate on fixed algorithms. We shape the workflow to match the situation.</p>
-                                
-                                <p>Yet most agent platforms today behave the opposite way.</p>
-
-                                <p>They run in static loops, predefined sequences, or pre-scripted automations.</p>
-                                
-                                <p>No matter how unique the task is, they follow the same rigid flow—unable to rethink the plan or choose a better route.</p>
-                                
-                                <p>This mismatch limits what agents can truly achieve.</p>
-
-                                <p className="highlight" style={{ fontSize: '1.3rem', fontWeight: 500, textDecoration: 'underline' }}>So we reimagined the idea entirely.</p>
-
-                                <p>Instead of forcing tasks into a fixed workflow, we built a system where the workflow chooses itself.</p>
-                                
-                                <p>A platform where agents work more like humans—assessing the task, evaluating options, and selecting the optimal path dynamically.</p>
-
-                                <p className="signature" style={{ fontSize: '1.25rem', marginTop: '2rem' }}>– The Team at Typewriting AI</p>
-                            </div>
-
-                            <style>
-                                {`
-                                    @keyframes fadeIn {
-                                        from { opacity: 0; transform: translateY(20px); }
-                                        to { opacity: 1; transform: translateY(0); }
-                                    }
-                                `}
-                            </style>
-                        </div>
-                    </div>
-                    </div>
-                </section>
-
-                <hr/>
-
-                <section className="py-5 features-section">
-                    <div className="container">
-                        <h2 className="text-center mb-5 fw-bold">What makes it different</h2>
-                        
-                        <div className="row">
-                            <div className="col-md-6">
-                                <div className="feature-card p-4 rounded shadow-sm h-100">
-                                    <div className="d-flex align-items-center mb-3">
-                                        <div className="feature-icon me-3">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" className="bi bi-chat-dots" viewBox="0 0 16 16">
-                                                <path d="M5 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm4 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm3 1a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/>
-                                                <path d="m2.165 15.803.02-.004c1.83-.363 2.948-.842 3.468-1.105A9.06 9.06 0 0 0 8 15c4.418 0 8-3.134 8-7s-3.582-7-8-7-8 3.134-8 7c0 1.76.743 3.37 1.97 4.6a10.437 10.437 0 0 1-.524 2.318l-.003.011a10.722 10.722 0 0 1-.244.637c-.079.186.074.394.273.362a21.673 21.673 0 0 0 .693-.125zm.8-3.108a1 1 0 0 0-.287-.801C1.618 10.83 1 9.468 1 8c0-3.192 3.004-6 7-6s7 2.808 7 6c0 3.193-3.004 6-7 6a8.06 8.06 0 0 1-2.088-.272 1 1 0 0 0-.711.074c-.387.196-1.24.57-2.634.893a10.97 10.97 0 0 0 .398-2z"/>
-                                            </svg>
-                                        </div>
-                                        <h4 className="mb-0">Natural Workflows</h4>
-                                    </div>
-                                    <p className="mb-0">Agents operate the way humans think — fluidly, not linearly. Instead of following rigid scripts, workflows evolve naturally based on the task, context, and intent. Each step adapts as the conversation progresses, creating a more intuitive and human-like problem-solving flow.</p>
-                                </div>
-                            </div>
-
-                            <div className="col-md-6">
-                                <div className="feature-card p-4 rounded shadow-sm h-100">
-                                    <div className="d-flex align-items-center mb-3">
-                                        <div className="feature-icon me-3">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" className="bi bi-arrows-angle-expand" viewBox="0 0 16 16">
-                                                <path fillRule="evenodd" d="M5.828 10.172a.5.5 0 0 0-.707 0l-4.096 4.096V11.5a.5.5 0 0 0-1 0v3.975a.5.5 0 0 0 .5.5H4.5a.5.5 0 0 0 0-1H1.732l4.096-4.096a.5.5 0 0 0 0-.707zm4.344-4.344a.5.5 0 0 0 .707 0l4.096-4.096V4.5a.5.5 0 1 0 1 0V.525a.5.5 0 0 0-.5-.5H11.5a.5.5 0 0 0 0 1h2.768l-4.096 4.096a.5.5 0 0 0 0 .707z"/>
-                                            </svg>
-                                        </div>
-                                        <h4 className="mb-0">Adaptive Systems</h4>
-                                    </div>
-                                    <p className="mb-0">The platform continuously adjusts its behavior in real time. Whether the situation requires deep exploration, quick actions, or multi-step reasoning, the system reshapes its workflow to match the task’s demands — ensuring optimal execution without manual setup.</p>
-                                </div>
-                            </div>
-
-                            <div className="col-md-6">
-                                <div className="feature-card p-4 rounded shadow-sm h-100">
-                                    <div className="d-flex align-items-center mb-3">
-                                        <div className="feature-icon me-3">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" className="bi bi-clock-history" viewBox="0 0 16 16">
-                                                <path d="M8.515 1.019A7 7 0 0 0 8 1V0a8 8 0 0 1 .589.022l-.074.997zm2.004.45a7.003 7.003 0 0 0-.985-.299l.219-.976c.383.086.76.2 1.126.342l-.36.933zm1.37.71a7.01 7.01 0 0 0-.439-.27l.493-.87a8.025 8.025 0 0 1 .979.654l-.615.789a6.996 6.996 0 0 0-.418-.302zm1.834 1.79a6.99 6.99 0 0 0-.653-.796l.724-.69c.27.285.52.59.747.91l-.818.576zm.744 1.352a7.08 7.08 0 0 0-.214-.468l.893-.45a7.976 7.976 0 0 1 .45 1.088l-.95.313a7.023 7.023 0 0 0-.179-.483zm.53 2.507a6.991 6.991 0 0 0-.1-1.025l.985-.17c.067.386.106.778.116 1.17l-1 .025zm-.131 1.538c.033-.17.06-.339.081-.51l.993.123a7.957 7.957 0 0 1-.23 1.155l-.964-.267c.046-.165.086-.332.12-.501zm-.952 2.379c.184-.29.346-.594.486-.908l.914.405c-.16.36-.345.706-.555 1.038l-.845-.535zm-.964 1.205c.122-.122.239-.248.35-.378l.758.653a8.073 8.073 0 0 1-.401.432l-.707-.707z"/>
-                                                <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8z"/>
-                                            </svg>
-                                        </div>
-                                        <h4 className="mb-0">Transparent Interactions</h4>
-                                    </div>
-                                    <p className="mb-0">Every action, decision, and handoff is visible and traceable. Users see why an agent chose a certain path, what information it relied on, and how it reached its conclusions. This transparency builds trust and helps teams understand, monitor, and refine complex AI-driven processes.</p>
-                                </div>
-                            </div>
-
-                            <div className="col-md-6">
-                                <div className="feature-card p-4 rounded shadow-sm h-100">
-                                    <div className="d-flex align-items-center mb-3">
-                                        <div className="feature-icon me-3">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" className="bi bi-lightbulb" viewBox="0 0 16 16">
-                                                <path d="M2 6a6 6 0 1 1 10.174 4.31c-.203.196-.359.4-.453.619l-.762 1.769A.5.5 0 0 1 10.5 13a.5.5 0 0 1 0 1 .5.5 0 0 1 0 1l-.224.447a1 1 0 0 1-.894.553H6.618a1 1 0 0 1-.894-.553L5.5 15a.5.5 0 0 1 0-1 .5.5 0 0 1 0-1 .5.5 0 0 1-.46-.302l-.761-1.77a1.964 1.964 0 0 0-.453-.618A5.984 5.984 0 0 1 2 6zm6-5a5 5 0 0 0-3.479 8.592c.263.254.514.564.676.941L5.83 12h4.342l.632-1.467c.162-.377.413-.687.676-.941A5 5 0 0 0 8 1z"/>
-                                            </svg>
-                                        </div>
-                                        <h4 className="mb-0">Self-Validation</h4>
-                                    </div>
-                                    <p className="mb-0">Before executing a task, agents evaluate their own reasoning and outputs. They check assumptions, verify information against your knowledge base, and confirm compliance with defined rules — reducing errors and ensuring high-quality, reliable decisions every time.</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="text-center mt-5">
-                            <a href={App.base + '/login'} className="btn btn-primary btn-lg px-4">
-                                Start Building Smarter Agents
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-arrow-right ms-2" viewBox="0 0 16 16">
-                                    <path fillRule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/>
-                                </svg>
-                            </a>
-                        </div>
-                    </div>
-                </section>
-
-                <hr/>
-
-                <section className="py-5 pricing-section">
-                    <div className="container">
-                        <h2 className="text-center mb-3 fw-bold">Free to start</h2>
-                        <p className="text-center mb-5">No credit card or payment information required</p>
-                        <div className="row justify-content-center">
-                        <div className="col-md-6">
-                                <div className="card shadow-sm">
-                                    <div className="card-body text-center p-5">
-                                        <h3 className="card-title mb-4">Free forever</h3>
-                                        <div className="price-tag mb-4">
-                                            <span className="display-4 fw-bold">$0</span>
-                                            <span className="text-muted">/month</span>
-                                        </div>
-                                        <ul className="list-unstyled mb-4">
-                                            <li className="mb-3">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-check-circle-fill text-success me-2" viewBox="0 0 16 16">
-                                                    <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
-                                                </svg>
-                                                Unlimited Projects
-                                            </li>
-                                            <li className="mb-3">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-check-circle-fill text-success me-2" viewBox="0 0 16 16">
-                                                    <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
-                                                </svg>
-                                                Full Feature Access
-                                            </li>
-                                            <li className="mb-3">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-check-circle-fill text-success me-2" viewBox="0 0 16 16">
-                                                    <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
-                                                </svg>
-                                                Unlimited APIs
-                                            </li>
-                                            <li>
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-info-circle-fill text-info me-2" viewBox="0 0 16 16">
-                                                    <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/>
-                                                </svg>
-                                                Upto 30 executions
-                                            </li>
-                                        </ul>
-                                        <a href={App.base + '/login'} className="btn btn-primary btn-lg">
-                                            Get Started Now
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="col-md-6">
-                                <div className="card shadow-sm">
-                                    <div className="card-body text-center p-5">
-                                        <h3 className="card-title mb-4">Pro</h3>
-                                        <div className="price-tag mb-4">
-                                            <span className="display-4 fw-bold">$20</span>
-                                            <span className="text-muted">/month</span>
-                                        </div>
-                                        <ul className="list-unstyled mb-4">
-                                            <li className="mb-3">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-check-circle-fill text-success me-2" viewBox="0 0 16 16">
-                                                    <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
-                                                </svg>
-                                                Unlimited Projects
-                                            </li>
-                                            <li className="mb-3">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-check-circle-fill text-success me-2" viewBox="0 0 16 16">
-                                                    <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
-                                                </svg>
-                                                Full Feature Access
-                                            </li>
-                                            <li className="mb-3">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-check-circle-fill text-success me-2" viewBox="0 0 16 16">
-                                                    <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
-                                                </svg>
-                                                Unlimited APIs
-                                            </li>
-                                            <li>
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-info-circle-fill text-info me-2" viewBox="0 0 16 16">
-                                                    <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/>
-                                                </svg>
-                                                Unlimited execution
-                                            </li>
-                                        </ul>
-                                        <a href={App.base + '/login'} className="btn btn-primary btn-lg">
-                                            Get Started Now
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
+            </div>
             <Footer />
         </>
     )

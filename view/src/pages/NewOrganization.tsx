@@ -9,7 +9,6 @@ interface dataState {
     accessKey: string;
     workspaces: any[];
     newWorkspaceTitle: string;
-    newWorkspaceMetas: any,
     isSubmitted: boolean;
     isValid: boolean;
 }
@@ -19,7 +18,6 @@ const NewOrganization: React.FC = () => {
         accessKey: '',
         workspaces: [],
         newWorkspaceTitle: '',
-        newWorkspaceMetas: { questionnaire: [''] },
         isSubmitted: false,
         isValid: true
     });
@@ -46,7 +44,7 @@ const NewOrganization: React.FC = () => {
                         'X-Vuedoo-Domain': App.domain,
                         'X-Vuedoo-Access-Key': data.accessKey
                     },
-                    body: JSON.stringify({ title: data.newWorkspaceTitle, metas: data.newWorkspaceMetas })
+                    body: JSON.stringify({ title: data.newWorkspaceTitle })
                 });
 
                 if (!response.ok) {
@@ -86,28 +84,9 @@ const NewOrganization: React.FC = () => {
                                     <h6>Create a new project</h6>
                                 </div>
                                 <div className="mb-3 mt-3">
-                                    <input type="text" className="form-control" placeholder="i.e. Acme Corporation" onChange={(e) => setData((prevData) => ({ ...prevData, newWorkspaceTitle: e.target.value }))} required />
+                                    <input type="text" className="form-control" placeholder="i.e. Finding nemo & his friends" value={data.newWorkspaceTitle} onChange={(e) => setData((prevData) => ({ ...prevData, newWorkspaceTitle: e.target.value }))} required />
                                     <div className="invalid-feedback" style={{ display: data.isSubmitted && !data.isValid ? 'block' : 'none' }}>Invalid name.</div>
                                 </div>
-                                <div className="d-flex justify-content-between align-items-center border-bottom pb-2 mb-0 d-none">
-                                    <h6>Information you are collecting (optional)</h6>
-                                </div>
-                                <div className={`mb-3 mt-3 d-none`}>
-                                    <div className="mb-3 mt-3">
-                                        <QuestionnaireFields 
-                                            questions={data.newWorkspaceMetas.questionnaire || ['']}
-                                            onChange={(newQuestions: any) => setData((prevData) => ({ 
-                                                ...prevData,
-                                                newWorkspaceMetas: { 
-                                                    ...prevData.newWorkspaceMetas, 
-                                                    questionnaire: newQuestions 
-                                                }
-                                            }))}
-                                            disabled={false}
-                                        />
-                                    </div>
-                                </div>
-                                
                                 <button type="submit" className="btn btn-primary">Create</button>
                             </form>
                         </div>
