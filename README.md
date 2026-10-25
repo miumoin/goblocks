@@ -23,7 +23,7 @@
 
 
 
-**[Goblocks](https://www.onyx.app/)** is a feature-rich, low code SaaS application builder boilerplate on Go with a blocks based elastic datbase design standard.
+**[Goblocks]** is a feature-rich, low code SaaS application builder boilerplate on Go with a blocks based elastic datbase design standard.
 
 > [!TIP]
 > Run Goblock with one command (or see deployment section below):
@@ -31,26 +31,8 @@
 > go build -o app && ./app
 > ```
 
-****
-
-![Demo](https://github.com/onyx-dot-app/onyx/releases/download/v0.21.1/OnyxChatSilentDemo.gif)
-
-
-
-## ⭐ Features
-- **Database:** Build AI Agents with unique instructions, knowledge and actions.
-- **Library:** Browse the web with Google PSE, Exa, and Serper as well as an in-house scraper or Firecrawl.
-- **API:** Best in class hybrid-search + knowledge graph for uploaded files and ingested documents from connectors. 
-- **Frontend:** Pull knowledge, metadata, and access information from over 40 applications.
 
 To learn more about the features, check out our [documentation](https://typewriting.ai/docs)!
-
-
-## 🔍 Other Notable Benefits
-Built for quick prototyping to production grade SaaS application.
-
-- **No more tables**: create and link as many chatbot you want .
-- **No password hassle**: SSO (OIDC/SAML/OAuth2), RBAC, encryption of credentials, etc.
 
 ## 🚧 Roadmap
 To see ongoing and upcoming projects, check out our [roadmap](https://typewriting.ai/docs)!
@@ -58,10 +40,9 @@ To see ongoing and upcoming projects, check out our [roadmap](https://typewritin
 
 
 ## 📚 Licensing
-There are two editions of Onyx:
 
 - Available freely under the MIT license.
-- Also available on freemium model hosted in our cloud.
+- Also available on freemium version hosted in our cloud.
 For feature details, check out [our website](https://typewriting.ai).
 
 
@@ -69,7 +50,3 @@ For feature details, check out [our website](https://typewriting.ai).
 ## 👪 Community
 Join our community on **[Discord](https://discord.gg/tqbH6Svz8k)**!
 
-
-
-## 💡 Contributing
-Looking to contribute? Please check out the [Contribution Guide](CONTRIBUTING.md) for more details.
