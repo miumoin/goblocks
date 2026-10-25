@@ -53,6 +53,7 @@ interface Shot {
   master_shot: boolean;
   selected: boolean;
   description: string;
+  image?: string | null;
   color: string;
   summary: string;
   scene: string;
@@ -97,6 +98,8 @@ const Organization: React.FC = () => {
     });
     const [selectedShot, setSelectedShot] = useState<any>(null);
     const [showModal, setShowModal] = useState(false);
+    const [shotSketch, setShotSketch] = useState('');
+    const [isGeneratingSketch, setIsGeneratingSketch] = useState(false);
 
     const [isDeleting, setIsDeleting] = useState(false);
     const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -349,7 +352,45 @@ const Organization: React.FC = () => {
 
     const handleShotClick = (shot: any) => {
         setSelectedShot(shot);
+        setShotSketch('');
         setShowModal(true);
+    };
+
+    const handleGenerateShotSketch = async () => {
+        if (!selectedShot || isGeneratingSketch) return;
+
+        setIsGeneratingSketch(true);
+        try {
+            const response = await fetch(`${App.api_base}/workspace/${data.slug}/generateShotSketch`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Vuedoo-Domain': App.domain,
+                    'X-Vuedoo-Access-Key': data.accessKey,
+                },
+                body: JSON.stringify({
+                    id: selectedShot.id,
+                    description: selectedShot.description,
+                    summary: selectedShot.summary,
+                    scene: selectedShot.scene,
+                    shot_type: selectedShot.shot_type,
+                    movement: selectedShot.movement,
+                }),
+            });
+            const result = await response.json();
+            const image = result.image;
+
+            if (!response.ok || result.status === 'error' || typeof image !== 'string') {
+                throw new Error(result.error || 'Could not generate a sketch.');
+            }
+            setSelectedShot((prev: any) => ({ ...prev, image }));
+            setTimeline(prevTimeline => prevTimeline.map(shot => shot.id === selectedShot.id ? { ...shot, image: image } : shot));
+        } catch (error) {
+            console.error('Error generating shot sketch:', error);
+            alert(error instanceof Error ? error.message : 'Could not generate a sketch.');
+        } finally {
+            setIsGeneratingSketch(false);
+        }
     };
 
     const handleCloseModal = () => {
@@ -892,17 +933,30 @@ const Organization: React.FC = () => {
                                                             <div className={`ratio ratio-16x9 ${shot.color} position-relative rounded-top`}>
                                                                 <div className="d-flex align-items-center justify-content-center text-white-50 fs-1">🎬</div>
                                                                 {shot.selected ? (
-                                                                    <Badge bg="success" className="position-absolute top-0 start-0 m-2" style={{ fontSize: '0.75rem' }}>✓ Selected</Badge>
+                                                                    <Badge bg="success" className="position-absolute top-0 start-0" style={{ fontSize: '0.75rem' }}>✓ Selected</Badge>
                                                                 ) : (
-                                                                    <Badge bg="warning" className="position-absolute top-0 start-0 m-2" style={{ fontSize: '0.75rem' }}>○ Not Selected</Badge>
+                                                                    <Badge bg="warning" className="position-absolute top-0 start-0" style={{ fontSize: '0.75rem' }}>○ Not Selected</Badge>
                                                                 )}
-                                                                <Badge bg="dark" className="position-absolute bottom-0 end-0 m-2 opacity-75" pill>{shot.duration}</Badge>
+                                                                {shot.image != null ? (
+                                                                    <Badge bg="dark" className="position-absolute bottom-0 end-0 opacity-75" pill style={{ backgroundImage: `url(${shot.image})`, backgroundSize: 'cover' }}>{shot.duration}</Badge>
+                                                                ) : (
+                                                                    <Badge bg="dark" className="position-absolute bottom-0 end-0 opacity-75" pill></Badge>
+                                                                )}
+                                                                <span className="position-absolute top-0 start-0 m-2 gap-1">
+                                                                    <Badge bg="info" text="dark" style={{ height: 'auto', width: 'auto', padding: '7px', marginRight: '7px' }}>⏱️ {shot.duration}</Badge>
+                                                                    
+                                                                    {shot.selected ? (
+                                                                        <Badge bg="info" text="dark" style={{ height: 'auto', width: 'auto', padding: '7px' }}>✓ Selected</Badge>
+                                                                    ) : (
+                                                                        <Badge bg="info" text="dark" style={{ height: 'auto', width: 'auto', padding: '7px' }}>○ Not Selected</Badge>
+                                                                    )}
+                                                                </span>
                                                             </div>
                                                             <Card.Body className="p-3">
                                                                 <div className="d-flex gap-2 mb-2 flex-wrap">
                                                                     <Badge bg="light" text="dark" className="fw-normal">{getShotIcon(shot.shot_type)} {shot.shot_type}</Badge>
                                                                     <Badge bg="light" text="dark" className="fw-normal">{getMovementIcon(shot.movement)} {shot.movement}</Badge>
-                                                                {shot.master_shot && <Badge bg="info" text="dark" className="fw-normal">🎬 Master</Badge>}
+                                                                    {shot.master_shot && <Badge bg="info" text="dark" className="fw-normal">🎬 Master</Badge>}
                                                                 </div>
                                                                 <Card.Text className="small mb-0 fw-medium">Shot {shot.id}: {shot.description}</Card.Text>
                                                             </Card.Body>
@@ -1111,16 +1165,31 @@ const Organization: React.FC = () => {
                                                     {/* Shot Preview Area */}
                                                     <div className="position-relative bg-black">
                                                         <div className={`ratio ratio-16x9 ${selectedShot.color}`}>
-                                                        <div className="d-flex align-items-center justify-content-center text-white-50 fs-1">
-                                                            🎬
-                                                        </div>
+                                                            {selectedShot.image != null ? (
+                                                                <img src={selectedShot.image} alt={`AI-generated sketch for shot ${selectedShot.id}`} className="w-100 h-100" style={{ objectFit: 'contain' }} />
+                                                            ) : (
+                                                                <div className="d-flex align-items-center justify-content-center text-white-50 fs-1">🎬</div>
+                                                            )}
                                                         </div>
                                                         <Badge 
                                                         bg="danger" 
                                                         className="position-absolute top-0 end-0 m-3 fw-bold px-3 py-2"
                                                         >
-                                                        ⏱ {selectedShot.duration}
+                                                            ⏱ {selectedShot.duration}
                                                         </Badge>
+                                                        <Button
+                                                            size="sm"
+                                                            className="position-absolute bottom-0 end-0 m-3 fw-bold"
+                                                            onClick={handleGenerateShotSketch}
+                                                            disabled={isGeneratingSketch}
+                                                            title="Generate an AI sketch for this shot"
+                                                        >
+                                                            {isGeneratingSketch ? (
+                                                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+                                                            ) : '✨'}
+                                                            {shotSketch ? 'Regenerate AI Sketch' : 'Generate AI Sketch'}
+                                                        </Button>
+                                                        
                                                     </div>
 
                                                     {/* Slate Info Grid */}
@@ -1154,17 +1223,17 @@ const Organization: React.FC = () => {
 
                                                         {/* Shot Type & Movement Badges */}
                                                         <div className="d-flex gap-2 mt-4 flex-wrap">
-                                                        <Badge bg="light" text="dark" className="px-3 py-2 fs-6">
-                                                            {selectedShot.shotIcon} {selectedShot.shotType}
-                                                        </Badge>
-                                                        <Badge bg="light" text="dark" className="px-3 py-2 fs-6">
-                                                            {selectedShot.movementIcon} {selectedShot.movement}
-                                                        </Badge>
-                                                        {selectedShot.masterShot && (
-                                                            <Badge bg="warning" text="dark" className="px-3 py-2 fs-6">
-                                                            🎬 MASTER SHOT
+                                                            <Badge bg="light" text="dark" className="px-3 py-2 fs-6">
+                                                                {getShotIcon(selectedShot.shot_type)} {selectedShot.shot_type}
                                                             </Badge>
-                                                        )}
+                                                            <Badge bg="light" text="dark" className="px-3 py-2 fs-6">
+                                                                {getMovementIcon(selectedShot.movement)} {selectedShot.movement}
+                                                            </Badge>
+                                                            {selectedShot.master_shot && (
+                                                                <Badge bg="warning" text="dark" className="px-3 py-2 fs-6">
+                                                                    🎬 MASTER SHOT
+                                                                </Badge>
+                                                            )}
                                                         </div>
 
                                                         {/* Shot Summary */}

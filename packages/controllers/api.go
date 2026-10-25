@@ -1,7 +1,9 @@
 package controllers
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -44,6 +46,7 @@ func (ac *ApiController) RegisterApiRoutes() {
 		apiGroup.POST("/workspace/:slug/saveCharacter", ac.SaveWorkspaceCharacter)
 		apiGroup.POST("/workspace/:slug/deleteCharacter", ac.DeleteCharacter)
 		apiGroup.POST("/workspace/:slug/generateTimeline", ac.GenerateTimeline)
+		apiGroup.POST("/workspace/:slug/generateShotSketch", ac.GenerateShotSketch)
 		apiGroup.GET("/workspace/:slug/threads/:page", ac.GetThreads)
 		apiGroup.GET("/workspace/:slug/thread/:threadSlug", ac.GetThread)
 		apiGroup.POST("/workspace/:slug/thread/:threadSlug/update", ac.UpdateThread)
@@ -321,6 +324,10 @@ func (ac *ApiController) GetWorkspace(c *gin.Context) {
 		if workspace != nil && err == nil {
 			characters, err := databaseManager.GetBlocks(userID, "character", 1, 999999, workspace["id"].(int64))
 			if err == nil && characters != nil {
+				for i, j := 0, len(characters)-1; i < j; i, j = i+1, j-1 {
+					characters[i], characters[j] = characters[j], characters[i]
+				}
+
 				for _, character := range characters {
 					// Parse the JSON string in the "content" field
 					if contentStr, ok := character["content"].(string); ok && contentStr != "" {
@@ -346,6 +353,10 @@ func (ac *ApiController) GetWorkspace(c *gin.Context) {
 
 			shots, err := databaseManager.GetBlocks(userID, "shot", 1, 999999, workspace["id"].(int64))
 			if err == nil && shots != nil {
+				for i, j := 0, len(shots)-1; i < j; i, j = i+1, j-1 {
+					shots[i], shots[j] = shots[j], shots[i]
+				}
+
 				for _, shot := range shots {
 					// Parse the JSON string in the "content" field
 					if contentStr, ok := shot["content"].(string); ok && contentStr != "" {
@@ -876,6 +887,141 @@ Ensure the timeline flows logically from beginning to end, creating a cohesive v
 	c.JSON(http.StatusOK, gin.H{
 		"status":   "success",
 		"timeline": generatedTimeline, // The frontend will parse this JSON string into an array
+	})
+}
+
+func (ac *ApiController) GenerateShotSketch(c *gin.Context) {
+	domain := c.GetHeader("X-Vuedoo-Domain")
+	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
+	slug := c.Param("slug")
+
+	// 1. Define struct with 'form' tags to parse multipart/form-data
+	var content struct {
+		ShotId      int64  `json:"id"`
+		Description string `json:"description"`
+		Summary     string `json:"summary"`
+		Scene       string `json:"scene"`
+		ShotType    string `json:"shot_type"`
+		Movement    string `json:"movement"`
+	}
+
+	if err := c.BindJSON(&content); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail"})
+		return
+	}
+
+	fmt.Println("Received GenerateShotSketch request:", content)
+
+	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
+	if dErr != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status":     "fail",
+			"workspaces": nil,
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+
+	// 1. Get the Workspace
+	workspace, err := databaseManager.GetBlock(userID, "workspace", 0, slug, 0)
+	if err != nil || workspace == nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "fail", "error": "workspace not found"})
+		return
+	}
+
+	workspaceID, _ := workspace["id"].(int64)
+
+	plot, _ := databaseManager.GetMeta("workspace", workspaceID, "plotText")
+
+	if plot == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "fail", "error": "workspace has no plot/description"})
+		return
+	}
+
+	characterContext := strings.Builder{}
+	characters, err := databaseManager.GetBlocks(userID, "character", 1, 999999, workspace["id"].(int64))
+	if err == nil && characters != nil {
+		for _, character := range characters {
+			// Parse the JSON string in the "content" field
+			if contentStr, ok := character["content"].(string); ok && contentStr != "" {
+				var parsedContent map[string]interface{}
+				if err := json.Unmarshal([]byte(contentStr), &parsedContent); err == nil {
+					// 1. Safely get the character ID
+					charID, ok := character["id"].(int64)
+					if !ok {
+						continue // Skip if ID is missing or wrong type
+					}
+
+					// 2. Fetch the image metadata
+					characterImage, _ := databaseManager.GetMeta("character", charID, "image")
+					parsedContent["image"] = characterImage
+
+					character["content"] = parsedContent
+					characterContext.WriteString(fmt.Sprintf("Character: %s, Gender: %s, Height: %s, Body Type: %s, Description: %s, Image URL: %s\n", parsedContent["name"], parsedContent["gender"], parsedContent["height"], parsedContent["bodyType"], parsedContent["description"], characterImage))
+				}
+			}
+		}
+
+		workspace["characters"] = characters
+	}
+
+	shotDescription := fmt.Sprintf("Shot Type: %s, Movement: %s, Description: %s, Summary: %s, Scene: %s", content.ShotType, content.Movement, content.Description, content.Summary, content.Scene)
+
+	bedrockPrompt := fmt.Sprintf(`A detailed sketch of a film shot. 
+Shot Description: %s
+Plot: %s
+Characters & References: %s
+Style: Cinematic storyboard sketch, clear camera angles, character positions, key visual elements, high contrast, professional concept art. The sketch will not have any text on it.`,
+		shotDescription, plot, characterContext.String())
+
+	fmt.Println("Generated prompt for shot sketch:", bedrockPrompt)
+
+	utils := services.NewUtilities(ac.db)
+	generatedSketch, err := utils.GenerateImageBase64(bedrockPrompt)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "fail",
+			"error":  err.Error(),
+		})
+		return
+	}
+
+	// 1. Clean the base64 string (remove data URI prefix if it exists, e.g., "data:image/jpeg;base64,")
+	cleanBase64 := generatedSketch
+	if idx := strings.Index(cleanBase64, ";base64,"); idx != -1 {
+		cleanBase64 = cleanBase64[idx+8:] // +8 skips the ";base64," part
+	}
+
+	// 2. Decode the base64 string into raw bytes (in memory, no disk I/O needed)
+	imgBytes, err := base64.StdEncoding.DecodeString(cleanBase64)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "fail",
+			"error":  "failed to decode base64 image: " + err.Error(),
+		})
+		return
+	}
+
+	// Generate unique S3 key
+	fileSlug := databaseManager.NewSlug(15)
+	s3Key := fmt.Sprintf("studio/%s/sketches/%d-%s.jpg", slug, content.ShotId, fileSlug)
+
+	// Upload to S3
+	err = utils.UploadFileObjectToS3(c.Request.Context(), bytes.NewReader(imgBytes), s3Key)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "failed to upload to S3"})
+		return
+	}
+
+	// TODO: Replace with your actual S3 bucket URL logic
+	imageURL := fmt.Sprintf("https://"+os.Getenv("AWS_S3_BUCKET")+".s3.amazonaws.com/%s", s3Key)
+	databaseManager.AddMeta("shot", int64(content.ShotId), "image", imageURL)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"image":  imageURL,
 	})
 }
 

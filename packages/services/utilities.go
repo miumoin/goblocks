@@ -1050,6 +1050,81 @@ func (u *Utilities) QueryBedrockWithImages(ctx context.Context, prompt string, i
 	return "", fmt.Errorf("no text content found in Bedrock response")
 }
 
+func (u *Utilities) GenerateImageBase64(prompt string) (string, error) {
+	ctx := context.Background()
+
+	if strings.TrimSpace(prompt) == "" {
+		return "", fmt.Errorf("image prompt cannot be empty")
+	}
+
+	// Load AWS configuration.
+	// Stable Diffusion 3.5 Large is documented for us-west-2.
+	cfg, err := config.LoadDefaultConfig(
+		ctx,
+		config.WithRegion("us-west-2"),
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
+	// Create Bedrock Runtime client.
+	bedrockClient := bedrockruntime.NewFromConfig(cfg)
+
+	modelID := "stability.sd3-5-large-v1:0"
+
+	// Stable Diffusion 3.5 Large request payload.
+	payload := map[string]interface{}{
+		"prompt":        prompt,
+		"mode":          "text-to-image",
+		"aspect_ratio":  "1:1",
+		"output_format": "png",
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	// Invoke Bedrock model.
+	resp, err := bedrockClient.InvokeModel(
+		ctx,
+		&bedrockruntime.InvokeModelInput{
+			ModelId:     aws.String(modelID),
+			ContentType: aws.String("application/json"),
+			Accept:      aws.String("application/json"),
+			Body:        payloadBytes,
+		},
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to invoke Bedrock model: %w", err)
+	}
+
+	// Parse model response.
+	var result struct {
+		Images        []string  `json:"images"`
+		FinishReasons []*string `json:"finish_reasons"`
+		Seeds         []int64   `json:"seeds"`
+	}
+
+	if err := json.Unmarshal(resp.Body, &result); err != nil {
+		return "", fmt.Errorf("failed to parse Bedrock response: %w", err)
+	}
+
+	// Check model filtering or inference errors.
+	for _, reason := range result.FinishReasons {
+		if reason != nil {
+			return "", fmt.Errorf("image generation failed: %s", *reason)
+		}
+	}
+
+	if len(result.Images) == 0 || result.Images[0] == "" {
+		return "", fmt.Errorf("no images returned by Bedrock")
+	}
+
+	// Return Base64-encoded PNG image.
+	return result.Images[0], nil
+}
+
 func (u *Utilities) ExtractJSONFromResponse(response string) (string, error) {
 	// Try to find JSON within markdown code blocks
 	jsonRegex := regexp.MustCompile("```json\\s*([\\s\\S]*?)\\s*```")
