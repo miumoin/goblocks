@@ -6,6 +6,7 @@ import ErrorText from '../components/ErrorText';
 import Button from 'react-bootstrap/Button';
 import Modal from 'react-bootstrap/Modal';
 import Tooltip from 'react-bootstrap/Tooltip';
+import InputGroup from 'react-bootstrap/InputGroup';
 
 import { 
   Card, ButtonGroup, Form, Badge, Row, Col, Container 
@@ -54,6 +55,7 @@ interface Shot {
   selected: boolean;
   description: string;
   image?: string | null;
+  video?: string | null;
   color: string;
   summary: string;
   scene: string;
@@ -74,6 +76,24 @@ interface Character {
   bodyType: string;
   description: string;
   image: string | File | null;
+}
+
+interface PexelsVideoFile {
+    id: number;
+    quality: string;
+    file_type: string;
+    width: number;
+    height: number;
+    link: string; // The direct .mp4 URL
+}
+
+interface PexelsVideo {
+    id: number;
+    width: number;
+    height: number;
+    duration: number;
+    user: { name: string };
+    video_files: PexelsVideoFile[];
 }
 
 const Organization: React.FC = () => {
@@ -158,6 +178,36 @@ const Organization: React.FC = () => {
     const movementType = MOVEMENT_TYPES.find(m => m.value === movement);
     return movementType?.icon || '⏸️';
     };
+
+     // --- CAMERA & RECORDING STATE ---
+    const [cameraMode, setCameraMode] = useState(false); // Single camera mode (preview + recording)
+    const [isRecording, setIsRecording] = useState(false);
+    const [showCountdown, setShowCountdown] = useState(false);
+    const [countdownValue, setCountdownValue] = useState<number | string>(3);
+    const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
+
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const chunksRef = useRef<Blob[]>([]);
+    const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // --- STOCK VIDEO LIBRARY STATE ---
+    const [showStockModal, setShowStockModal] = useState(false);
+    const [stockQuery, setStockQuery] = useState("");
+    const [stockVideos, setStockVideos] = useState<PexelsVideo[]>([]);
+    const [isStockLoading, setIsStockLoading] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalResults, setTotalResults] = useState(0);
+    const PER_PAGE = 12; // Number of results per page
+
+    // --- SKETCH VIEW STATE ---
+    const [showSketchView, setShowSketchView] = useState(false);
+    const previewVideoRef = useRef<HTMLVideoElement>(null);
+    const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+
+    //extra state to track if all shots have video
+    const [allShotsHaveVideo, setAllShotsHaveVideo] = useState(false);
 
     // --- TIMELINE HANDLERS ---
     const handleGenerateTimeline = async(e: React.FormEvent) => {
@@ -350,12 +400,6 @@ const Organization: React.FC = () => {
 
     const [timeline, setTimeline] = useState<Shot[]>([]);
 
-    const handleShotClick = (shot: any) => {
-        setSelectedShot(shot);
-        setShotSketch('');
-        setShowModal(true);
-    };
-
     const handleGenerateShotSketch = async () => {
         if (!selectedShot || isGeneratingSketch) return;
 
@@ -403,23 +447,23 @@ const Organization: React.FC = () => {
         const newSceneNum = String(timeline.length + 1).padStart(2, '0');
         
         const newShot: Shot = {
-        id: newId,
-        duration: '0s',
-        shot_type: 'Wide',
-        shot_icon: '🌄',
-        movement: 'Static',
-        movement_icon: '⏸️',
-        master_shot: false,
-        selected: false,
-        description: 'New scene - click to edit details.',
-        color: newId % 2 === 0 ? 'bg-secondary' : 'bg-dark',
-        summary: 'This is a new scene. Click to configure shot details, movement, and duration.',
-        scene: newSceneNum,
-        take: '01',
-        roll: 'A001',
-        director: 'A. Director',
-        camera: 'ARRI Alexa',
-        date: '06.08.2026'
+            id: newId,
+            duration: '0s',
+            shot_type: 'Wide',
+            shot_icon: '🌄',
+            movement: 'Static',
+            movement_icon: '⏸️',
+            master_shot: false,
+            selected: false,
+            description: 'New scene - click to edit details.',
+            color: newId % 2 === 0 ? 'bg-secondary' : 'bg-dark',
+            summary: 'This is a new scene. Click to configure shot details, movement, and duration.',
+            scene: newSceneNum,
+            take: '01',
+            roll: 'A001',
+            director: 'A. Director',
+            camera: 'ARRI Alexa',
+            date: '06.08.2026'
         };
         
         setTimeline(prev => [...prev, newShot]);
@@ -689,7 +733,6 @@ const Organization: React.FC = () => {
         };
     }, []);
 
-
     const savePlotChanges = async(e: React.FormEvent): Promise<void> => {
         e.preventDefault();
         try {
@@ -740,6 +783,519 @@ const Organization: React.FC = () => {
     const nodeWindowref = useRef<OpenNodeWindowHandle>(null);
     const triggerNode = () => {
         nodeWindowref.current?.enableNode();
+    };
+
+    // Helper to find the best supported video format for the user's browser
+    const getSupportedMimeType = () => {
+        const types = [
+            'video/webm;codecs=vp9,opus',
+            'video/webm;codecs=vp8,opus',
+            'video/mp4',
+            'video/webm'
+        ];
+        
+        for (const type of types) {
+            if (MediaRecorder.isTypeSupported(type)) {
+                console.log("Using supported MIME type:", type);
+                return type;
+            }
+        }
+        return '';
+    };
+
+    // Start camera preview
+    const handleStartCamera = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "environment" },
+                audio: true 
+            });
+            
+            streamRef.current = stream;
+            
+            // Set camera mode FIRST, then attach stream after render
+            setCameraMode(true);
+            setRecordedVideoUrl(null);
+            
+            // Use setTimeout to ensure video element is mounted before attaching stream
+            setTimeout(() => {
+                if (videoRef.current && streamRef.current) {
+                    videoRef.current.srcObject = streamRef.current;
+                }
+            }, 100);
+            
+        } catch (err) {
+            console.error("Error accessing camera:", err);
+            alert("Could not access camera. Please ensure permissions are granted in your browser settings.");
+        }
+    };
+
+    // Start countdown and recording
+    const handleStartRecording = () => {
+        setShowCountdown(true);
+        setCountdownValue(3);
+        
+        let count = 3;
+        countdownTimerRef.current = setInterval(() => {
+            count -= 1;
+            if (count > 0) {
+                setCountdownValue(count);
+            } else if (count === 0) {
+                setCountdownValue("ACTION!");
+                startRecording();
+                setTimeout(() => setShowCountdown(false), 1500);
+                if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+            }
+        }, 1000);
+    };
+
+    const startRecording = () => {
+        if (!streamRef.current) return;
+        
+        const mimeType = getSupportedMimeType();
+        const options = mimeType ? { mimeType } : {};
+        
+        const mediaRecorder = new MediaRecorder(streamRef.current, options);
+        mediaRecorderRef.current = mediaRecorder;
+        chunksRef.current = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) {
+                chunksRef.current.push(e.data);
+            }
+        };
+
+        mediaRecorder.onstop = () => {
+            const blobType = mimeType || 'video/webm';
+            const blob = new Blob(chunksRef.current, { type: blobType });
+            const url = URL.createObjectURL(blob);
+            setRecordedVideoUrl(url);
+            setCameraMode(false); // Exit camera mode to show recorded preview
+        };
+
+        mediaRecorder.start();
+        setIsRecording(true);
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+        }
+    };
+
+    const cleanupCamera = () => {
+        if (countdownTimerRef.current) {
+            clearInterval(countdownTimerRef.current);
+        }
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+        if (recordedVideoUrl) {
+            URL.revokeObjectURL(recordedVideoUrl);
+            setRecordedVideoUrl(null);
+        }
+        setCameraMode(false);
+        setIsRecording(false);
+        setShowCountdown(false);
+    };
+
+    // Cleanup camera when modal closes or component unmounts
+    useEffect(() => {
+        if (!showModal) {
+            cleanupCamera();
+        }
+        return () => {
+            cleanupCamera();
+        };
+    }, [showModal]);
+
+    const handleSaveShot = async () => {
+        if (!recordedVideoUrl || !selectedShot) {
+            alert("No video to save or shot not selected.");
+            return;
+        }
+
+        try {
+            // 1. Convert blob URL to Blob object
+            const response = await fetch(recordedVideoUrl);
+            const blob = await response.blob();
+            
+            // 2. Create FormData and append the video file
+            const formData = new FormData();
+            formData.append('video', blob, `shot_${selectedShot.id}_${Date.now()}.webm`);
+            formData.append('shotId', selectedShot.id.toString());
+            
+            // 3. Upload to backend
+            const uploadResponse = await fetch(`${App.api_base}/workspace/${data.slug}/uploadShotVideo`, {
+                method: "POST",
+                headers: {
+                    "X-Vuedoo-Domain": App.domain,
+                    "X-Vuedoo-Access-Key": data.accessKey,
+                },
+                body: formData,
+            });
+
+            if (!uploadResponse.ok) {
+                throw new Error("Network response was not ok");
+            }
+
+            const result = await uploadResponse.json();
+
+            if (result.status === 'success') {
+                // 4. Update the timeline state with the new video URL
+                const videoUrl = result.videoUrl; // Backend should return the S3 URL
+                
+                setTimeline(prevTimeline => 
+                    prevTimeline.map(shot => 
+                        shot.id === selectedShot.id 
+                            ? { ...shot, video: videoUrl } 
+                            : shot
+                    )
+                );
+
+                // 5. Update selectedShot for consistency
+                setSelectedShot((prev: any) => ({ ...prev, video: videoUrl }));
+
+                // 6. Clean up and close modal
+                cleanupCamera();
+                handleCloseModal();
+            } else {
+                throw new Error(result.error || "Failed to save video");
+            }
+
+        } catch (error) {
+            console.error("Error saving shot video:", error);
+            alert(error instanceof Error ? error.message : "An error occurred while saving the video.");
+        }
+    };
+
+    // Ref for the hidden file input
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Trigger the hidden file input click
+    const handleUploadClipClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    // Handle the file selection and upload
+    const handleClipFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !selectedShot) return;
+
+        // Optional: Validate file type and size
+        if (!file.type.startsWith('video/')) {
+            alert("Please select a valid video file.");
+            return;
+        }
+        if (file.size > 500 * 1024 * 1024) { // 500MB limit
+            alert("Video file is too large. Maximum size is 500MB.");
+            return;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('video', file);
+            formData.append('shotId', selectedShot.id.toString());
+
+            // We can reuse the same backend endpoint used for saving recorded videos
+            const uploadResponse = await fetch(`${App.api_base}/workspace/${data.slug}/uploadShotVideo`, {
+                method: "POST",
+                headers: {
+                    "X-Vuedoo-Domain": App.domain,
+                    "X-Vuedoo-Access-Key": data.accessKey,
+                },
+                body: formData,
+            });
+
+            if (!uploadResponse.ok) {
+                throw new Error("Network response was not ok");
+            }
+
+            const result = await uploadResponse.json();
+
+            if (result.status === 'success') {
+                const videoUrl = result.videoUrl;
+                
+                // Update timeline state
+                setTimeline(prevTimeline => 
+                    prevTimeline.map(shot => 
+                        shot.id === selectedShot.id ? { ...shot, video: videoUrl } : shot
+                    )
+                );
+
+                // Update selected shot state
+                setSelectedShot((prev: any) => ({ ...prev, video: videoUrl }));
+                handleCloseModal();
+            } else {
+                throw new Error(result.error || "Failed to upload clip");
+            }
+        } catch (error) {
+            console.error("Error uploading clip:", error);
+            alert(error instanceof Error ? error.message : "An error occurred while uploading the clip.");
+        } finally {
+            // Reset the input value so the same file can be selected again if needed
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        }
+    };
+
+        // Helper: Extract a concise search query from the shot's description
+    const buildSearchQueryFromShot = (shot: any): string => {
+        if (!shot) return "";
+        
+        // Use description as primary source, fallback to summary
+        const source = shot.description || shot.summary || "";
+        
+        // Take first 60 chars and clean up (remove trailing punctuation)
+        let query = source.substring(0, 60).trim();
+        query = query.replace(/[.,;:!?]+$/, ""); // Remove trailing punctuation
+        
+        // If the description is very short, append shot type for better results
+        if (query.length < 15 && shot.shot_type) {
+            query = `${shot.shot_type} shot ${query}`;
+        }
+        
+        return query;
+    };
+
+    // Search with pagination support
+    const handleSearchStockVideos = async (query: string, page: number = 1) => {
+        if (!query.trim()) return;
+        setIsStockLoading(true);
+        try {
+            const apiKey = "563492ad6f91700001000001bfbb942790434d29a695266d20a13a36";
+            
+            const response = await fetch(
+                `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=${PER_PAGE}&page=${page}&size=medium`,
+                {
+                    headers: { "Authorization": apiKey }
+                }
+            );
+            
+            if (!response.ok) {
+                throw new Error("Failed to fetch from Pexels. Check your API Key.");
+            }
+            
+            const data = await response.json();
+            setStockVideos(data.videos || []);
+            setTotalResults(data.total_results || 0);
+            setCurrentPage(page);
+        } catch (error) {
+            console.error("Error fetching from Pexels:", error);
+            alert("Failed to load stock videos. Please ensure your Pexels API key is set in .env");
+        } finally {
+            setIsStockLoading(false);
+        }
+    };
+
+    // Auto-trigger search when modal opens
+    useEffect(() => {
+        if (showStockModal && selectedShot) {
+            const autoQuery = buildSearchQueryFromShot(selectedShot);
+            setStockQuery(autoQuery);
+            if (autoQuery.trim()) {
+                handleSearchStockVideos(autoQuery, 1);
+            }
+        } else if (!showStockModal) {
+            // Reset state when modal closes
+            setStockVideos([]);
+            setStockQuery("");
+            setCurrentPage(1);
+            setTotalResults(0);
+        }
+    }, [showStockModal]);
+
+    // Manual search (resets to page 1)
+    const handleManualSearch = () => {
+        if (stockQuery.trim()) {
+            handleSearchStockVideos(stockQuery, 1);
+        }
+    };
+
+    // Pagination handlers
+    const handlePrevPage = () => {
+        if (currentPage > 1) {
+            handleSearchStockVideos(stockQuery, currentPage - 1);
+        }
+    };
+
+    const handleNextPage = () => {
+        const totalPages = Math.ceil(totalResults / PER_PAGE);
+        if (currentPage < totalPages) {
+            handleSearchStockVideos(stockQuery, currentPage + 1);
+        }
+    };
+
+    const handleSelectStockVideo = async (video: PexelsVideo) => {
+        if (!selectedShot) return;
+        
+        // Find the best quality MP4 file (prefer 1080p or 720p)
+        const bestFile = video.video_files.find(f => f.width === 1920 || f.height === 1080) 
+                      || video.video_files.find(f => f.file_type === 'video/mp4')
+                      || video.video_files[0];
+
+        if (!bestFile) {
+            alert("No valid video file found for this selection.");
+            return;
+        }
+
+        const videoUrl = bestFile.link;
+
+        try {
+            // Send the video URL to the backend API
+            const response = await fetch(`${App.api_base}/workspace/${data.slug}/saveShotVideoUrl`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Vuedoo-Domain": App.domain,
+                    "X-Vuedoo-Access-Key": data.accessKey,
+                },
+                body: JSON.stringify({
+                    shotId: selectedShot.id,
+                    videoUrl: videoUrl,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Network response was not ok");
+            }
+
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                // Update the main timeline state
+                setTimeline(prevTimeline => 
+                    prevTimeline.map(shot => 
+                        shot.id === selectedShot.id ? { ...shot, video: videoUrl } : shot
+                    )
+                );
+                
+                // Update the currently selected shot state
+                setSelectedShot((prev: any) => ({ ...prev, video: videoUrl }));
+                
+                // Close modal and notify user
+                setShowStockModal(false);
+            } else {
+                throw new Error(result.error || "Failed to save video URL");
+            }
+
+        } catch (error) {
+            console.error("Error saving stock video:", error);
+            alert(error instanceof Error ? error.message : "An error occurred while saving the video.");
+        }
+    };
+
+    const handleShotClick = (shot: any) => {
+        setSelectedShot(shot);
+        setShotSketch('');
+        setShowSketchView(false); // Reset to video view (default)
+        setIsVideoPlaying(false);
+        setShowModal(true);
+    };
+
+    const toggleVideoPlay = () => {
+        if (!previewVideoRef.current) {
+            console.warn("Video ref not available");
+            return;
+        }
+        
+        const video = previewVideoRef.current;
+        
+        if (video.paused) {
+            // Attempt to play with error handling for browser restrictions
+            const playPromise = video.play();
+            if (playPromise !== undefined) {
+                playPromise
+                    .then(() => {
+                        setIsVideoPlaying(true);
+                    })
+                    .catch((error) => {
+                        console.error("Play failed:", error);
+                        // If autoplay is blocked, try unmuting (some browsers allow this)
+                        video.muted = false;
+                        video.play().catch(() => {
+                            alert("Unable to play video. Please check your browser settings.");
+                        });
+                    });
+            }
+        } else {
+            video.pause();
+            setIsVideoPlaying(false);
+        }
+    };
+
+    const toggleViewMode = () => {
+        setShowSketchView(prev => !prev);
+        setIsVideoPlaying(false);
+    };
+
+     // Monitor timeline to check if all shots have videos assigned
+    useEffect(() => {
+        if (timeline.length === 0) {
+            setAllShotsHaveVideo(false);
+            return;
+        }
+
+        // Check if every shot has a non-empty video property
+        const allHaveVideo = timeline.every(shot => 
+            shot.video && shot.video.trim() !== ''
+        );
+
+        setAllShotsHaveVideo(allHaveVideo);
+    }, [timeline]);
+
+    const handleExportProject = async () => {
+        if (!allShotsHaveVideo) {
+            alert("All shots must have videos before exporting.");
+            return;
+        }
+
+        try {
+            const response = await fetch(`${App.api_base}/workspace/${data.slug}/exportDaVinciPackage`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Vuedoo-Domain": App.domain,
+                    "X-Vuedoo-Access-Key": data.accessKey,
+                },
+                body: JSON.stringify({
+                    projectName: data.workspace.title || "Untitled Project",
+                    fps: 24,
+                    timeline: timeline.map((shot, index) => ({
+                        id: shot.id,
+                        name: `Shot_${String(shot.id).padStart(3, '0')}`,
+                        video: shot.video,
+                        description: shot.description,
+                        sequence: index + 1
+                    }))
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || "Network response was not ok");
+            }
+
+            // Download the ZIP file
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${data.workspace.title || 'project'}_davinci_package.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+
+            alert("DaVinci Resolve package exported! Extract the ZIP and import the XML file into DaVinci Resolve. All videos are included.");
+
+        } catch (error) {
+            console.error("Error exporting project:", error);
+            alert(error instanceof Error ? error.message : "An error occurred while exporting.");
+        }
     };
     
     return (
@@ -884,39 +1440,56 @@ const Organization: React.FC = () => {
                                                 <div className="d-flex justify-content-between align-items-center mb-3">
                                                     <h5 className="fw-bold text-dark mb-0">Timeline & Storyboard</h5>
                                                     <div className="d-flex gap-2">
-                                                    {/* Generate Timeline Button - Always visible */}
-                                                    <Button 
-                                                        variant="dark" 
-                                                        size="sm" 
-                                                        onClick={handleGenerateTimeline}
-                                                        disabled={isGenerating || isTimelineGenerated}
-                                                        className="d-flex align-items-center gap-2 px-3"
-                                                    >
-                                                        {isGenerating ? (
-                                                        <>
-                                                            <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                                            Generating...
-                                                        </>
-                                                        ) : (
-                                                        <>
-                                                            <span>✨</span>
-                                                            {isTimelineGenerated ? 'Timeline Generated' : 'Generate Timeline'}
-                                                        </>
-                                                        )}
-                                                    </Button>
-
-                                                    {/* Add Scene Button - Only visible after timeline is generated */}
-                                                    {isTimelineGenerated && (
+                                                        {/* Generate Timeline Button - Always visible */}
                                                         <Button 
-                                                        variant="outline-primary" 
-                                                        size="sm" 
-                                                        onClick={handleAddScene}
-                                                        className="d-flex align-items-center gap-2 px-3"
+                                                            variant="dark" 
+                                                            size="sm" 
+                                                            onClick={handleGenerateTimeline}
+                                                            disabled={isGenerating || isTimelineGenerated}
+                                                            className="d-flex align-items-center gap-2 px-3"
                                                         >
-                                                        <span>🎬</span>
-                                                        Add Scene
+                                                            {isGenerating ? (
+                                                            <>
+                                                                <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                                Generating...
+                                                            </>
+                                                            ) : (
+                                                            <>
+                                                                <span>✨</span>
+                                                                {isTimelineGenerated ? 'Timeline Generated' : 'Generate Timeline'}
+                                                            </>
+                                                            )}
                                                         </Button>
-                                                    )}
+
+                                                        {/* Add Scene Button - Only visible after timeline is generated */}
+                                                        {isTimelineGenerated && (
+                                                            <Button 
+                                                            variant="outline-primary" 
+                                                            size="sm" 
+                                                            onClick={handleAddScene}
+                                                            className="d-flex align-items-center gap-2 px-3"
+                                                            >
+                                                            <span>🎬</span>
+                                                            Add Scene
+                                                            </Button>
+                                                        )}
+
+                                                        {/* EXPORT BUTTON - Only enabled when all shots have videos */}
+                                                        {isTimelineGenerated && (
+                                                            <Button 
+                                                                variant="success" 
+                                                                size="sm" 
+                                                                onClick={handleExportProject}
+                                                                disabled={!allShotsHaveVideo}
+                                                                className="d-flex align-items-center gap-2 px-3"
+                                                                title={allShotsHaveVideo 
+                                                                    ? "Export the complete project" 
+                                                                    : `Add videos to all shots to enable export (${timeline.filter(s => !s.video || s.video.trim() === '').length} shots missing videos)`}
+                                                            >
+                                                                <span>📦</span>
+                                                                Export Project
+                                                            </Button>
+                                                        )}
                                                     </div>
                                                 </div>
 
@@ -926,13 +1499,13 @@ const Organization: React.FC = () => {
                                                     {timeline.map((shot) => (
                                                         <Card 
                                                         key={shot.id} 
-                                                        className={`border shadow-sm flex-shrink-0 ${shot.selected ? 'border-primary border-2' : ''}`} 
+                                                        className={`border shadow-sm flex-shrink-0 ${shot.video !== "" ? 'border-primary border-2' : ''}`} 
                                                         style={{ width: '280px', cursor: 'pointer' }}
                                                         onClick={() => handleShotClick(shot)}
                                                         >
                                                             <div className={`ratio ratio-16x9 ${shot.color} position-relative rounded-top`}>
                                                                 <div className="d-flex align-items-center justify-content-center text-white-50 fs-1">🎬</div>
-                                                                {shot.selected ? (
+                                                                {shot.video !== "" ? (
                                                                     <Badge bg="success" className="position-absolute top-0 start-0" style={{ fontSize: '0.75rem' }}>✓ Selected</Badge>
                                                                 ) : (
                                                                     <Badge bg="warning" className="position-absolute top-0 start-0" style={{ fontSize: '0.75rem' }}>○ Not Selected</Badge>
@@ -945,10 +1518,10 @@ const Organization: React.FC = () => {
                                                                 <span className="position-absolute top-0 start-0 m-2 gap-1">
                                                                     <Badge bg="info" text="dark" style={{ height: 'auto', width: 'auto', padding: '7px', marginRight: '7px' }}>⏱️ {shot.duration}</Badge>
                                                                     
-                                                                    {shot.selected ? (
-                                                                        <Badge bg="info" text="dark" style={{ height: 'auto', width: 'auto', padding: '7px' }}>✓ Selected</Badge>
+                                                                    {shot.video !== "" ? (
+                                                                        <Badge bg="success" text="dark" style={{ height: 'auto', width: 'auto', padding: '7px' }}>✓ Selected</Badge>
                                                                     ) : (
-                                                                        <Badge bg="info" text="dark" style={{ height: 'auto', width: 'auto', padding: '7px' }}>○ Not Selected</Badge>
+                                                                        <Badge bg="danger" text="dark" style={{ height: 'auto', width: 'auto', padding: '7px' }}>○ Not Selected</Badge>
                                                                     )}
                                                                 </span>
                                                             </div>
@@ -1138,151 +1711,444 @@ const Organization: React.FC = () => {
                                                 centered
                                                 contentClassName="bg-dark text-white border-0 overflow-hidden"
                                             >
-                                                {selectedShot && (
+                                                {/* --- SLATE INFO VIEW (No Camera) --- */}
+                                                {selectedShot && !cameraMode && !recordedVideoUrl && (
                                                 <>
-                                                    {/* Clapper Top - Diagonal Stripes */}
-                                                    <div 
-                                                    className="position-relative"
-                                                    style={{ 
-                                                        ...clapperStripes, 
-                                                        height: '60px',
-                                                        borderBottom: '4px solid #000'
-                                                    }}
-                                                    >
-                                                    <div className="position-absolute top-50 start-50 translate-middle bg-dark text-white px-4 py-1 fw-bold fs-4" style={{ letterSpacing: '4px' }}>
-                                                        WIT WORKS STUDIO
-                                                    </div>
-                                                    <button 
-                                                        className="btn btn-close btn-close-white position-absolute top-50 end-0 translate-middle-y me-3"
-                                                        onClick={handleCloseModal}
-                                                        aria-label="Close"
-                                                    ></button>
+                                                    <div className="position-relative" style={{ ...clapperStripes, height: '60px', borderBottom: '4px solid #000' }}>
+                                                        <div className="position-absolute top-50 start-50 translate-middle bg-dark text-white px-4 py-1 fw-bold fs-4" style={{ letterSpacing: '4px' }}>
+                                                            WIT WORKS STUDIO
+                                                        </div>
+                                                        <button className="btn btn-close btn-close-white position-absolute top-50 end-0 translate-middle-y me-3" onClick={handleCloseModal} aria-label="Close"></button>
                                                     </div>
 
-                                                    {/* Slate Body - Info Grid */}
                                                     <Modal.Body className="bg-dark text-white p-0">
-                                                    
-                                                    {/* Shot Preview Area */}
-                                                    <div className="position-relative bg-black">
-                                                        <div className={`ratio ratio-16x9 ${selectedShot.color}`}>
-                                                            {selectedShot.image != null ? (
-                                                                <img src={selectedShot.image} alt={`AI-generated sketch for shot ${selectedShot.id}`} className="w-100 h-100" style={{ objectFit: 'contain' }} />
-                                                            ) : (
-                                                                <div className="d-flex align-items-center justify-content-center text-white-50 fs-1">🎬</div>
-                                                            )}
-                                                        </div>
-                                                        <Badge 
-                                                        bg="danger" 
-                                                        className="position-absolute top-0 end-0 m-3 fw-bold px-3 py-2"
-                                                        >
-                                                            ⏱ {selectedShot.duration}
-                                                        </Badge>
-                                                        <Button
-                                                            size="sm"
-                                                            className="position-absolute bottom-0 end-0 m-3 fw-bold"
-                                                            onClick={handleGenerateShotSketch}
-                                                            disabled={isGeneratingSketch}
-                                                            title="Generate an AI sketch for this shot"
-                                                        >
-                                                            {isGeneratingSketch ? (
-                                                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
-                                                            ) : '✨'}
-                                                            {shotSketch ? 'Regenerate AI Sketch' : 'Generate AI Sketch'}
-                                                        </Button>
-                                                        
-                                                    </div>
+                                                        <div className="position-relative bg-black">
+                                                            <div className="position-relative bg-black">
+                                                                <div className={`ratio ratio-16x9 ${selectedShot.color} position-relative overflow-hidden`}>
+                                                                    
+                                                                    {/* --- VIDEO (Always mounted, hidden via CSS when showing sketch) --- */}
+                                                                    {selectedShot.video && (
+                                                                        <video
+                                                                            ref={previewVideoRef}
+                                                                            src={selectedShot.video}
+                                                                            className="w-100 h-100"
+                                                                            style={{ 
+                                                                                objectFit: 'contain', 
+                                                                                backgroundColor: '#000',
+                                                                                visibility: showSketchView ? 'hidden' : 'visible',
+                                                                                position: 'absolute',
+                                                                                top: 0,
+                                                                                left: 0,
+                                                                                width: '100%',
+                                                                                height: '100%'
+                                                                            }}
+                                                                            loop
+                                                                            playsInline
+                                                                            muted
+                                                                            onPlay={() => setIsVideoPlaying(true)}
+                                                                            onPause={() => setIsVideoPlaying(false)}
+                                                                        />
+                                                                    )}
 
-                                                    {/* Slate Info Grid */}
-                                                    <div className="p-4 border-top border-secondary">
-                                                        <Row className="g-0 text-uppercase fw-bold" style={{ fontSize: '0.85rem' }}>
-                                                        <Col xs={6} md={4} className="border border-secondary p-3">
-                                                            <div className="text-secondary small mb-1">SCENE</div>
-                                                            <div className="fs-4">{selectedShot.scene}</div>
-                                                        </Col>
-                                                        <Col xs={6} md={4} className="border border-secondary p-3">
-                                                            <div className="text-secondary small mb-1">TAKE</div>
-                                                            <div className="fs-4">{selectedShot.take}</div>
-                                                        </Col>
-                                                        <Col xs={6} md={4} className="border border-secondary p-3">
-                                                            <div className="text-secondary small mb-1">ROLL</div>
-                                                            <div className="fs-4">{selectedShot.roll}</div>
-                                                        </Col>
-                                                        <Col xs={6} md={4} className="border border-secondary p-3">
-                                                            <div className="text-secondary small mb-1">DIRECTOR</div>
-                                                            <div className="fs-5">{selectedShot.director}</div>
-                                                        </Col>
-                                                        <Col xs={6} md={4} className="border border-secondary p-3">
-                                                            <div className="text-secondary small mb-1">CAMERA</div>
-                                                            <div className="fs-5">{selectedShot.camera}</div>
-                                                        </Col>
-                                                        <Col xs={6} md={4} className="border border-secondary p-3">
-                                                            <div className="text-secondary small mb-1">DATE</div>
-                                                            <div className="fs-5">{selectedShot.date}</div>
-                                                        </Col>
-                                                        </Row>
+                                                                    {/* --- SKETCH (Always mounted, hidden via CSS when showing video) --- */}
+                                                                    {selectedShot.image && (
+                                                                        <img
+                                                                            src={selectedShot.image}
+                                                                            alt={`AI-generated sketch for shot ${selectedShot.id}`}
+                                                                            className="w-100 h-100"
+                                                                            style={{ 
+                                                                                objectFit: 'contain',
+                                                                                visibility: showSketchView ? 'visible' : 'hidden',
+                                                                                position: 'absolute',
+                                                                                top: 0,
+                                                                                left: 0,
+                                                                                width: '100%',
+                                                                                height: '100%'
+                                                                            }}
+                                                                        />
+                                                                    )}
 
-                                                        {/* Shot Type & Movement Badges */}
-                                                        <div className="d-flex gap-2 mt-4 flex-wrap">
-                                                            <Badge bg="light" text="dark" className="px-3 py-2 fs-6">
-                                                                {getShotIcon(selectedShot.shot_type)} {selectedShot.shot_type}
-                                                            </Badge>
-                                                            <Badge bg="light" text="dark" className="px-3 py-2 fs-6">
-                                                                {getMovementIcon(selectedShot.movement)} {selectedShot.movement}
-                                                            </Badge>
-                                                            {selectedShot.master_shot && (
-                                                                <Badge bg="warning" text="dark" className="px-3 py-2 fs-6">
-                                                                    🎬 MASTER SHOT
+                                                                    {/* --- EMPTY PLACEHOLDER (Only when neither exists) --- */}
+                                                                    {!selectedShot.video && !selectedShot.image && (
+                                                                        <div className="d-flex align-items-center justify-content-center text-white-50 fs-1 w-100 h-100">
+                                                                            🎬
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* --- PLAY/PAUSE BUTTON (Only visible when video is shown) --- */}
+                                                                    {selectedShot.video && !showSketchView && (
+                                                                        <button
+                                                                            className="btn btn-dark position-absolute top-50 start-50 translate-middle rounded-circle d-flex align-items-center justify-content-center shadow"
+                                                                            style={{ width: '64px', height: '64px', opacity: 0.85, zIndex: 11 }}
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                toggleVideoPlay();
+                                                                            }}
+                                                                            title={isVideoPlaying ? 'Pause' : 'Play'}
+                                                                        >
+                                                                            {isVideoPlaying ? (
+                                                                                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="white" viewBox="0 0 16 16">
+                                                                                    <path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/>
+                                                                                </svg>
+                                                                            ) : (
+                                                                                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="white" viewBox="0 0 16 16" style={{ marginLeft: '4px' }}>
+                                                                                    <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
+                                                                                </svg>
+                                                                            )}
+                                                                        </button>
+                                                                    )}
+
+                                                                    {/* --- TOGGLE BUTTON (Only visible when BOTH video AND sketch exist) --- */}
+                                                                    {selectedShot.video && selectedShot.image && (
+                                                                        <div className="position-absolute top-0 start-0 m-3" style={{ zIndex: 10 }}>
+                                                                            <div className="btn-group shadow-sm" role="group">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className={`btn btn-sm ${!showSketchView ? 'btn-primary' : 'btn-light'}`}
+                                                                                    onClick={toggleViewMode}
+                                                                                    title="Show video"
+                                                                                >
+                                                                                    🎬 Video
+                                                                                </button>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className={`btn btn-sm ${showSketchView ? 'btn-primary' : 'btn-light'}`}
+                                                                                    onClick={toggleViewMode}
+                                                                                    title="Show sketch"
+                                                                                >
+                                                                                    ✨ Sketch
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* --- OVERLAY BADGES (Always on top) --- */}
+                                                                <Badge bg="danger" className="position-absolute top-0 end-0 m-3 fw-bold px-3 py-2" style={{ zIndex: 10 }}>
+                                                                    ⏱ {selectedShot.duration}
                                                                 </Badge>
-                                                            )}
+                                                                <Button
+                                                                    size="sm"
+                                                                    className="position-absolute bottom-0 end-0 m-3 fw-bold"
+                                                                    onClick={handleGenerateShotSketch}
+                                                                    disabled={isGeneratingSketch}
+                                                                    style={{ zIndex: 10 }}
+                                                                >
+                                                                    {isGeneratingSketch ? <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" /> : '✨'}
+                                                                    {selectedShot.image ? 'Regenerate AI Sketch' : 'Generate AI Sketch'}
+                                                                </Button>
+                                                            </div>
+
+                                                            {/* --- OVERLAY BADGES (Always on top) --- */}
+                                                            <Badge bg="danger" className="position-absolute top-0 end-0 m-3 fw-bold px-3 py-2">
+                                                                ⏱ {selectedShot.duration}
+                                                            </Badge>
+                                                            <Button
+                                                                size="sm"
+                                                                className="position-absolute bottom-0 end-0 m-3 fw-bold"
+                                                                onClick={handleGenerateShotSketch}
+                                                                disabled={isGeneratingSketch}
+                                                            >
+                                                                {isGeneratingSketch ? <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" /> : '✨'}
+                                                                {selectedShot.image ? 'Regenerate AI Sketch' : 'Generate AI Sketch'}
+                                                            </Button>
                                                         </div>
 
-                                                        {/* Shot Summary */}
-                                                        <div className="mt-4 p-3 bg-black rounded border border-secondary">
-                                                        <div className="text-secondary small text-uppercase fw-bold mb-2">SHOT DESCRIPTION</div>
-                                                        <p className="mb-0 text-white fs-6">
-                                                            <span className="fw-bold text-warning">Shot {selectedShot.id}:</span> {selectedShot.summary}
-                                                        </p>
+                                                        <div className="p-4 border-top border-secondary">
+                                                            <Row className="g-0 text-uppercase fw-bold" style={{ fontSize: '0.85rem' }}>
+                                                                <Col xs={6} md={4} className="border border-secondary p-3"><div className="text-secondary small mb-1">SCENE</div><div className="fs-4">{selectedShot.scene}</div></Col>
+                                                                <Col xs={6} md={4} className="border border-secondary p-3"><div className="text-secondary small mb-1">TAKE</div><div className="fs-4">{selectedShot.take}</div></Col>
+                                                                <Col xs={6} md={4} className="border border-secondary p-3"><div className="text-secondary small mb-1">ROLL</div><div className="fs-4">{selectedShot.roll}</div></Col>
+                                                                <Col xs={6} md={4} className="border border-secondary p-3"><div className="text-secondary small mb-1">DIRECTOR</div><div className="fs-5">{selectedShot.director}</div></Col>
+                                                                <Col xs={6} md={4} className="border border-secondary p-3"><div className="text-secondary small mb-1">CAMERA</div><div className="fs-5">{selectedShot.camera}</div></Col>
+                                                                <Col xs={6} md={4} className="border border-secondary p-3"><div className="text-secondary small mb-1">DATE</div><div className="fs-5">{selectedShot.date}</div></Col>
+                                                            </Row>
+                                                            <div className="d-flex gap-2 mt-4 flex-wrap">
+                                                                <Badge bg="light" text="dark" className="px-3 py-2 fs-6">{getShotIcon(selectedShot.shot_type)} {selectedShot.shot_type}</Badge>
+                                                                <Badge bg="light" text="dark" className="px-3 py-2 fs-6">{getMovementIcon(selectedShot.movement)} {selectedShot.movement}</Badge>
+                                                                {selectedShot.master_shot && <Badge bg="warning" text="dark" className="px-3 py-2 fs-6">🎬 MASTER SHOT</Badge>}
+                                                            </div>
+                                                            <div className="mt-4 p-3 bg-black rounded border border-secondary">
+                                                                <div className="text-secondary small text-uppercase fw-bold mb-2">SHOT DESCRIPTION</div>
+                                                                <p className="mb-0 text-white fs-6"><span className="fw-bold text-warning">Shot {selectedShot.id}:</span> {selectedShot.summary}</p>
+                                                            </div>
                                                         </div>
-                                                    </div>
 
-                                                    {/* Action Buttons */}
-                                                    <div className="p-4 bg-black border-top border-secondary">
-                                                        <Row className="g-3">
-                                                        <Col md={4}>
-                                                            <Button 
-                                                            variant="outline-light" 
-                                                            className="w-100 py-3 border-2"
-                                                            onClick={() => console.log('Upload clip')}
-                                                            >
-                                                            <div className="fs-2 mb-1">📤</div>
-                                                            <div className="fw-bold text-uppercase small">Upload Clip</div>
-                                                            </Button>
-                                                        </Col>
-                                                        <Col md={4}>
-                                                            <Button 
-                                                            variant="outline-light" 
-                                                            className="w-100 py-3 border-2"
-                                                            onClick={() => console.log('Select from stock')}
-                                                            >
-                                                            <div className="fs-2 mb-1">🖼️</div>
-                                                            <div className="fw-bold text-uppercase small">Stock Library</div>
-                                                            </Button>
-                                                        </Col>
-                                                        <Col md={4}>
-                                                            <Button 
-                                                            variant="danger" 
-                                                            className="w-100 py-3 border-2 fw-bold"
-                                                            onClick={() => console.log('Start camera')}
-                                                            >
-                                                            <div className="fs-2 mb-1">🔴</div>
-                                                            <div className="fw-bold text-uppercase small">Start Camera</div>
-                                                            </Button>
-                                                        </Col>
-                                                        </Row>
-                                                    </div>
+                                                        <div className="p-4 bg-black border-top border-secondary">
+                                                            <Row className="g-3">
+                                                                <Col md={4}>
+                                                                    <Button 
+                                                                        variant="outline-light" 
+                                                                        className="w-100 py-3 border-2" 
+                                                                        onClick={handleUploadClipClick}
+                                                                    >
+                                                                        <div className="fs-2 mb-1">📤</div>
+                                                                        <div className="fw-bold text-uppercase small">Upload Clip</div>
+                                                                    </Button>
+                                                                    {/* Hidden File Input for Clip Upload */}
+                                                                    <input
+                                                                        type="file"
+                                                                        ref={fileInputRef}
+                                                                        accept="video/*"
+                                                                        style={{ display: 'none' }}
+                                                                        onChange={handleClipFileChange}
+                                                                    />
+                                                                </Col>
+                                                                <Col md={4}>
+                                                                    <Button variant="outline-light" className="w-100 py-3 border-2" onClick={() => setShowStockModal(true)}>
+                                                                        <div className="fs-2 mb-1">🖼️</div><div className="fw-bold text-uppercase small">Stock Library</div>
+                                                                    </Button>
+                                                                </Col>
+                                                                <Col md={4}>
+                                                                    <Button variant="danger" className="w-100 py-3 border-2 fw-bold" onClick={handleStartCamera}>
+                                                                        <div className="fs-2 mb-1">🔴</div>
+                                                                        <div className="fw-bold text-uppercase small">Start Camera</div>
+                                                                    </Button>
+                                                                </Col>
+                                                            </Row>
+                                                        </div>
                                                     </Modal.Body>
                                                 </>
                                                 )}
+
+                                                {/* --- CAMERA MODE (Preview + Recording - Single Persistent Video Element) --- */}
+                                                {cameraMode && (
+                                                    <Modal.Body className="bg-black text-white p-0 position-relative">
+                                                        {/* Single video element that persists through preview and recording */}
+                                                        <video 
+                                                            ref={videoRef} 
+                                                            autoPlay 
+                                                            playsInline 
+                                                            muted 
+                                                            className="w-100" 
+                                                            style={{ maxHeight: '70vh', objectFit: 'cover' }} 
+                                                        />
+                                                        
+                                                        {/* Framing Guide Overlay (Only show during preview, not recording) */}
+                                                        {!isRecording && !showCountdown && (
+                                                            <div className="position-absolute top-0 start-0 w-100 h-100 pointer-events-none" style={{ border: '2px dashed rgba(255,255,255,0.3)' }}>
+                                                                <div className="position-absolute" style={{ top: '33.33%', left: 0, right: 0, height: '1px', backgroundColor: 'rgba(255,255,255,0.15)' }}></div>
+                                                                <div className="position-absolute" style={{ top: '66.66%', left: 0, right: 0, height: '1px', backgroundColor: 'rgba(255,255,255,0.15)' }}></div>
+                                                                <div className="position-absolute" style={{ left: '33.33%', top: 0, bottom: 0, width: '1px', backgroundColor: 'rgba(255,255,255,0.15)' }}></div>
+                                                                <div className="position-absolute" style={{ left: '66.66%', top: 0, bottom: 0, width: '1px', backgroundColor: 'rgba(255,255,255,0.15)' }}></div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Instructions (Only show during preview) */}
+                                                        {!isRecording && !showCountdown && (
+                                                            <div className="position-absolute top-0 start-50 translate-middle-x m-3 bg-black bg-opacity-75 px-4 py-2 rounded-pill">
+                                                                <small className="fw-bold">Frame your shot, then click "Start Recording"</small>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Cinematic Countdown Overlay */}
+                                                        {showCountdown && (
+                                                            <div className="position-absolute top-50 start-50 translate-middle text-center">
+                                                                <h1 className={`display-1 fw-black ${countdownValue === "ACTION!" ? "text-success" : "text-white"}`} 
+                                                                    style={{ textShadow: '0 4px 20px rgba(0,0,0,0.8)', fontSize: '8rem', lineHeight: 1 }}>
+                                                                    {countdownValue}
+                                                                </h1>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Recording Indicator */}
+                                                        {isRecording && !showCountdown && (
+                                                            <div className="position-absolute top-0 start-0 m-3 d-flex align-items-center gap-2 bg-danger bg-opacity-75 px-3 py-2 rounded-pill">
+                                                                <span className="badge bg-white rounded-circle" style={{ width: '12px', height: '12px', animation: 'pulse 1.5s infinite' }}></span>
+                                                                <span className="fw-bold small">REC</span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Close & Control Buttons */}
+                                                        <div className="position-absolute top-0 end-0 m-3 d-flex gap-2">
+                                                            <button className="btn btn-close btn-close-white" onClick={handleCloseModal} aria-label="Close"></button>
+                                                            {isRecording && (
+                                                                <Button variant="danger" size="lg" className="fw-bold px-4" onClick={stopRecording}>
+                                                                    ⏹ Stop Recording
+                                                                </Button>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Start Recording Button (Only show during preview) */}
+                                                        {!isRecording && !showCountdown && (
+                                                            <div className="position-absolute bottom-0 start-50 translate-middle-x mb-4">
+                                                                <Button variant="danger" size="lg" className="fw-bold px-5 py-3 fs-5" onClick={handleStartRecording}>
+                                                                    <span className="me-2">🔴</span> Start Recording
+                                                                </Button>
+                                                            </div>
+                                                        )}
+                                                    </Modal.Body>
+                                                )}
+
+                                                {/* --- RECORDED VIDEO PREVIEW VIEW --- */}
+                                                {recordedVideoUrl && !cameraMode && (
+                                                    <Modal.Body className="bg-dark text-white p-0 position-relative">
+                                                        <div className="position-relative bg-black">
+                                                            <video 
+                                                                src={recordedVideoUrl} 
+                                                                controls 
+                                                                autoPlay 
+                                                                className="w-100" 
+                                                                style={{ maxHeight: '70vh' }} 
+                                                            />
+                                                            <button className="btn btn-close btn-close-white position-absolute top-0 end-0 m-3" onClick={handleCloseModal} aria-label="Close"></button>
+                                                        </div>
+                                                        <div className="p-4 bg-black border-top border-secondary">
+                                                            <Row className="g-3">
+                                                                <Col md={6}>
+                                                                    <Button variant="outline-light" className="w-100 py-3 border-2" onClick={() => { cleanupCamera(); handleStartCamera(); }}>
+                                                                        <div className="fs-2 mb-1">🔄</div>
+                                                                        <div className="fw-bold text-uppercase small">Retake</div>
+                                                                    </Button>
+                                                                </Col>
+                                                                <Col md={6}>
+                                                                    <Button 
+                                                                        variant="success" 
+                                                                        className="w-100 py-3 border-2 fw-bold" 
+                                                                        onClick={handleSaveShot}
+                                                                        disabled={!recordedVideoUrl}
+                                                                    >
+                                                                        <div className="fs-2 mb-1">💾</div>
+                                                                        <div className="fw-bold text-uppercase small">Save to Shot</div>
+                                                                    </Button>
+                                                                </Col>
+                                                            </Row>
+                                                        </div>
+                                                    </Modal.Body>
+                                                )}
+                                            </Modal>
+
+                                            {/* --- STOCK VIDEO LIBRARY MODAL --- */}
+                                            <Modal show={showStockModal} onHide={() => setShowStockModal(false)} size="xl" centered>
+                                                <Modal.Header closeButton className="border-bottom">
+                                                    <Modal.Title className="fw-bold">🎬 Stock Video Library (Pexels)</Modal.Title>
+                                                </Modal.Header>
+                                                <Modal.Body>
+                                                    {/* Search Bar */}
+                                                    <Form className="mb-4">
+                                                        <InputGroup size="lg">
+                                                            <Form.Control 
+                                                                placeholder="Search stock videos (e.g., 'cyberpunk city', 'forest drone')" 
+                                                                value={stockQuery}
+                                                                onChange={(e) => setStockQuery(e.target.value)}
+                                                                onKeyDown={(e) => e.key === 'Enter' && handleManualSearch()}
+                                                            />
+                                                            <Button 
+                                                                variant="primary" 
+                                                                onClick={handleManualSearch} 
+                                                                disabled={isStockLoading || !stockQuery.trim()}
+                                                                className="px-4"
+                                                            >
+                                                                {isStockLoading ? (
+                                                                    <><span className="spinner-border spinner-border-sm me-2" />Searching...</>
+                                                                ) : 'Search'}
+                                                            </Button>
+                                                        </InputGroup>
+                                                    </Form>
+
+                                                    {/* Results Summary */}
+                                                    {!isStockLoading && totalResults > 0 && (
+                                                        <div className="d-flex justify-content-between align-items-center mb-3">
+                                                            <small className="text-muted">
+                                                                Showing <strong>{(currentPage - 1) * PER_PAGE + 1}-{Math.min(currentPage * PER_PAGE, totalResults)}</strong> of <strong>{totalResults.toLocaleString()}</strong> results
+                                                            </small>
+                                                            <small className="text-muted">
+                                                                Page <strong>{currentPage}</strong> of <strong>{Math.ceil(totalResults / PER_PAGE)}</strong>
+                                                            </small>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Content Area */}
+                                                    {isStockLoading ? (
+                                                        <div className="text-center py-5">
+                                                            <div className="spinner-border text-primary mb-3" style={{ width: '3rem', height: '3rem' }} />
+                                                            <p className="text-muted">Searching high-quality stock videos...</p>
+                                                        </div>
+                                                    ) : stockVideos.length > 0 ? (
+                                                        <>
+                                                            <Row xs={1} sm={2} lg={3} xl={4} className="g-3">
+                                                                {stockVideos.map((vid) => {
+                                                                    const previewFile = vid.video_files.find(f => f.width === 1920 || f.height === 1080) || vid.video_files[0];
+                                                                    return (
+                                                                        <Col key={vid.id}>
+                                                                            <div 
+                                                                                className="position-relative rounded overflow-hidden border bg-black shadow-sm" 
+                                                                                style={{ cursor: 'pointer', aspectRatio: '16/9', transition: 'transform 0.2s' }}
+                                                                                onMouseEnter={(e) => {
+                                                                                    e.currentTarget.style.transform = 'scale(1.03)';
+                                                                                    const videoEl = e.currentTarget.querySelector('video') as HTMLVideoElement;
+                                                                                    if (videoEl) videoEl.play().catch(() => {});
+                                                                                }}
+                                                                                onMouseLeave={(e) => {
+                                                                                    e.currentTarget.style.transform = 'scale(1)';
+                                                                                    const videoEl = e.currentTarget.querySelector('video') as HTMLVideoElement;
+                                                                                    if (videoEl) {
+                                                                                        videoEl.pause();
+                                                                                        videoEl.currentTime = 0;
+                                                                                    }
+                                                                                }}
+                                                                                onClick={() => handleSelectStockVideo(vid)}
+                                                                                title="Click to use this video for the shot"
+                                                                            >
+                                                                                <video 
+                                                                                    src={previewFile?.link} 
+                                                                                    className="w-100 h-100" 
+                                                                                    style={{ objectFit: 'cover' }} 
+                                                                                    muted 
+                                                                                    loop 
+                                                                                    playsInline
+                                                                                    preload="none"
+                                                                                />
+                                                                                <div className="position-absolute bottom-0 start-0 end-0 bg-dark bg-opacity-75 text-white p-2 small d-flex justify-content-between align-items-center">
+                                                                                    <span className="text-truncate pe-2">🎬 {vid.duration}s</span>
+                                                                                    <span className="badge bg-primary">Select</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        </Col>
+                                                                    );
+                                                                })}
+                                                            </Row>
+
+                                                            {/* Pagination Controls */}
+                                                            <div className="d-flex justify-content-center align-items-center gap-3 mt-4">
+                                                                <Button 
+                                                                    variant="secondary" 
+                                                                    onClick={handlePrevPage} 
+                                                                    disabled={currentPage <= 1 || isStockLoading}
+                                                                >
+                                                                    ← Previous
+                                                                </Button>
+                                                                <span className="fw-medium">
+                                                                    Page {currentPage} of {Math.ceil(totalResults / PER_PAGE)}
+                                                                </span>
+                                                                <Button 
+                                                                    variant="secondary" 
+                                                                    onClick={handleNextPage} 
+                                                                    disabled={currentPage >= Math.ceil(totalResults / PER_PAGE) || isStockLoading}
+                                                                >
+                                                                    Next →
+                                                                </Button>
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <div className="text-center py-5 rounded border border-dashed">
+                                                            <div className="fs-1 mb-3">🎥</div>
+                                                            <h5>Find the perfect motion visual</h5>
+                                                            <p className="mb-0">
+                                                                {selectedShot 
+                                                                    ? `Searching for videos matching: "${buildSearchQueryFromShot(selectedShot)}"`
+                                                                    : "Search for high-quality, free-to-use stock video clips to attach to this shot."}
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                    
+                                                    <div className="mt-4 text-center">
+                                                        <small>
+                                                            Powered by <a href="https://www.pexels.com/api/" target="_blank" rel="noopener noreferrer" className="text-decoration-none">Pexels</a>. 
+                                                            Videos are free to use under the Pexels License.
+                                                        </small>
+                                                    </div>
+                                                </Modal.Body>
                                             </Modal>
                                         </Container>
                                     </>

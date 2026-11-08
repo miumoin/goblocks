@@ -108,6 +108,28 @@ type ShotData struct {
 	MasterShot  bool   `json:"master_shot"`
 }
 
+type ClipData struct {
+	ID          int
+	Name        string
+	Offset      string
+	Duration    string
+	Description string
+}
+
+type AssetData struct {
+	ID       int
+	Name     string
+	Filename string // Local filename instead of URL
+	Duration string
+}
+
+type FCPXMLData struct {
+	ProjectName string
+	FPS         int
+	Clips       []ClipData
+	Assets      []AssetData
+}
+
 const maxImageSizeBytes = 100 * 1024 // 100 KB
 
 func (r *Request) GetContent() ([]byte, error) {
@@ -1051,6 +1073,9 @@ func (u *Utilities) QueryBedrockWithImages(ctx context.Context, prompt string, i
 }
 
 func (u *Utilities) GenerateImageBase64(prompt string) (string, error) {
+	/* intentionally stopped generating images for now
+	..
+
 	ctx := context.Background()
 
 	if strings.TrimSpace(prompt) == "" {
@@ -1123,6 +1148,9 @@ func (u *Utilities) GenerateImageBase64(prompt string) (string, error) {
 
 	// Return Base64-encoded PNG image.
 	return result.Images[0], nil
+
+	*/
+	return "", fmt.Errorf("image generation is currently disabled")
 }
 
 func (u *Utilities) ExtractJSONFromResponse(response string) (string, error) {
