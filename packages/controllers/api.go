@@ -6,13 +6,15 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -1042,9 +1044,10 @@ func (ac *ApiController) SaveWorkspaceShotVideo(c *gin.Context) {
 	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
 	slug := c.Param("slug")
 
-	// 1. Define struct to parse the shot ID from multipart/form-data
+	// 1. Define struct (added VideoDuration to capture frontend estimate as fallback)
 	var content struct {
-		ShotID int64 `form:"shotId" binding:"required"`
+		ShotID        int64   `form:"shotId" binding:"required"`
+		VideoDuration float64 `form:"videoDuration"`
 	}
 
 	// 2. Bind the form data
@@ -1083,33 +1086,98 @@ func (ac *ApiController) SaveWorkspaceShotVideo(c *gin.Context) {
 	}
 
 	fileHeader := files[0]
-	file, err := fileHeader.Open()
+	uploadedFile, err := fileHeader.Open()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "failed to open uploaded file"})
 		return
 	}
+	defer uploadedFile.Close()
 
-	// CRITICAL: Defer closing the file to prevent memory/file descriptor leaks
-	defer file.Close()
+	// --- NEW: CONVERSION LOGIC START ---
 
-	// 6. Generate S3 Key and Upload
+	// Create a temporary directory for the upload and conversion
+	tempDir, err := os.MkdirTemp("", "video_convert_*")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "Failed to create temp directory"})
+		return
+	}
+	defer os.RemoveAll(tempDir) // CRITICAL: Automatically clean up temp files when function exits
+
+	// Save the uploaded file to the temp directory
 	ext := filepath.Ext(fileHeader.Filename)
 	if ext == "" {
-		ext = ".webm" // Fallback extension if browser doesn't provide one
+		ext = ".webm" // Safe fallback
+	}
+	inputPath := filepath.Join(tempDir, "input"+ext)
+
+	tempFile, err := os.Create(inputPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "Failed to create temp file"})
+		return
 	}
 
-	fileSlug := databaseManager.NewSlug(15)
-	// Organize videos in a dedicated 'videos' folder per workspace
-	s3Key := fmt.Sprintf("studio/%s/videos/%d-%s%s", slug, content.ShotID, fileSlug, ext)
+	if _, err := io.Copy(tempFile, uploadedFile); err != nil {
+		tempFile.Close()
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "Failed to save uploaded file to disk"})
+		return
+	}
+	tempFile.Close()
 
+	// Convert to web-optimized MP4 using FFmpeg
+	outputPath := filepath.Join(tempDir, "output.mp4")
+	cmd := exec.Command("ffmpeg",
+		"-i", inputPath,
+		"-c:v", "libx264", // Standard H.264 video codec
+		"-preset", "medium", // Good balance of speed and quality
+		"-crf", "23", // Quality level (18-28 is standard, lower is better)
+		"-c:a", "aac", // Standard AAC audio codec
+		"-b:a", "128k", // Audio bitrate
+		"-movflags", "+faststart", // Moves metadata to the front for instant web playback
+		"-y", // Overwrite output file without prompting
+		outputPath,
+	)
+
+	if out, err := cmd.CombinedOutput(); err != nil {
+		fmt.Printf("[FFMPEG ERROR] %s\n", string(out))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "fail",
+			"error":  "Failed to convert video to MP4. Ensure the file is a valid video.",
+		})
+		return
+	}
+
+	// Open the newly converted MP4 file
+	mp4File, err := os.Open(outputPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "Failed to open converted MP4"})
+		return
+	}
+	defer mp4File.Close()
+
+	// --- NEW: ACCURATE DURATION CALCULATION ---
+	// Calculate the exact duration of the final MP4 file using the utility we built earlier
 	utils := services.NewUtilities(ac.db)
-	err = utils.UploadFileObjectToS3(c.Request.Context(), file, s3Key)
+	finalDuration, _ := getVideoDuration(outputPath)
+
+	// Fallback to frontend estimate if ffprobe somehow fails on the new file
+	if finalDuration <= 0 && content.VideoDuration > 0 {
+		finalDuration = content.VideoDuration
+	}
+
+	// --- END CONVERSION LOGIC ---
+
+	// 6. Generate S3 Key (ALWAYS .mp4)
+	fileSlug := databaseManager.NewSlug(15)
+	s3Key := fmt.Sprintf("studio/%s/videos/%d-%s.mp4", slug, content.ShotID, fileSlug)
+
+	// 7. Upload the MP4 to S3
+	err = utils.UploadFileObjectToS3(c.Request.Context(), mp4File, s3Key)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "failed to upload to S3: " + err.Error()})
 		return
 	}
 
-	// 7. Construct Public URL and Save to Database
+	// 8. Construct Public URL and Save to Database
 	bucketName := os.Getenv("AWS_S3_BUCKET")
 	if bucketName == "" {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "AWS_S3_BUCKET environment variable not set"})
@@ -1118,18 +1186,24 @@ func (ac *ApiController) SaveWorkspaceShotVideo(c *gin.Context) {
 
 	videoURL := fmt.Sprintf("https://%s.s3.amazonaws.com/%s", bucketName, s3Key)
 
-	// Save the video URL as metadata for this specific shot
+	// Save the video URL
 	err = databaseManager.AddMeta("shot", content.ShotID, "video", videoURL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "failed to save video metadata to database"})
 		return
 	}
 
-	// 8. Return Success Response
+	// Save the accurate backend-calculated duration
+	if finalDuration > 0 {
+		_ = databaseManager.AddMeta("shot", content.ShotID, "videoDuration", finalDuration)
+	}
+
+	// 9. Return Success Response
 	c.JSON(http.StatusOK, gin.H{
-		"status":   "success",
-		"videoUrl": videoURL,
-		"message":  "Video uploaded and saved successfully",
+		"status":        "success",
+		"videoUrl":      videoURL,
+		"videoDuration": finalDuration,
+		"message":       "Video converted to MP4 and saved successfully",
 	})
 }
 
@@ -1181,214 +1255,422 @@ func (ac *ApiController) SaveWorkspaceShotVideoUrl(c *gin.Context) {
 	})
 }
 
-// FCPXML Template with local file references
-const fcpxmlTemplate = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE fcpxml>
-<fcpxml version="1.9">
-    <library location="file:///">
-        <event name="{{.ProjectName}}">
-            <project name="{{.ProjectName}}">
-                <sequence format="FFVideoFormat1080p{{.FPS}}" tcStart="0s" tcFormat="NDF" audioLayout="stereo" audioRate="48k">
-                    <spine>
-                        {{range .Clips}}<asset-clip name="{{.Name}}" ref="r{{.ID}}" offset="{{.Offset}}" duration="{{.Duration}}" start="0s" tcFormat="NDF">
-                            <note>{{.Description}}</note>
-                        </asset-clip>
-                        {{end}}
-                    </spine>
-                </sequence>
-            </project>
-            {{range .Assets}}<asset id="r{{.ID}}" name="{{.Name}}" src="{{.Filename}}" duration="{{.Duration}}" start="0s" hasVideo="1" hasAudio="1"/>
-            {{end}}
-        </event>
-    </library>
-</fcpxml>`
+// ------------------------------------------------------------
+// Request structures
+// ------------------------------------------------------------
 
-type ClipData struct {
-	ID          int
-	Name        string
-	Offset      string
-	Duration    string
-	Description string
+type TimelineShot struct {
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	Video       string `json:"video"`
+	Description string `json:"description"`
+	Sequence    int    `json:"sequence"`
 }
 
-type AssetData struct {
-	ID       int
-	Name     string
-	Filename string // Local filename instead of URL
-	Duration string
+type DaVinciExportRequest struct {
+	ProjectName string         `json:"projectName" binding:"required"`
+	FPS         int            `json:"fps"`
+	Timeline    []TimelineShot `json:"timeline" binding:"required"`
 }
 
-type FCPXMLData struct {
-	ProjectName string
-	FPS         int
-	Clips       []ClipData
-	Assets      []AssetData
+type ExportClip struct {
+	Shot       TimelineShot
+	ResourceID string
+	Filename   string
+	VideoPath  string
+	Duration   float64
+	Frames     int64
+	HasAudio   bool
 }
 
-// GetVideoDuration uses ffprobe to get video duration in seconds.
-// It tries multiple methods to handle files with missing or corrupted metadata.
-func getVideoDuration(videoPath string) (float64, error) {
-	// 1. Verify the file exists and has content
-	fileInfo, err := os.Stat(videoPath)
+// ------------------------------------------------------------
+// FCPXML structures
+// ------------------------------------------------------------
+
+type FCPXML struct {
+	XMLName   xml.Name     `xml:"fcpxml"`
+	Version   string       `xml:"version,attr"`
+	Resources FCPResources `xml:"resources"`
+	Library   FCPLibrary   `xml:"library"`
+}
+
+type FCPResources struct {
+	Format FCPFormat  `xml:"format"`
+	Assets []FCPAsset `xml:"asset"`
+}
+
+type FCPFormat struct {
+	ID            string `xml:"id,attr"`
+	Name          string `xml:"name,attr"`
+	FrameDuration string `xml:"frameDuration,attr"`
+	Width         int    `xml:"width,attr"`
+	Height        int    `xml:"height,attr"`
+}
+
+type FCPAsset struct {
+	ID            string      `xml:"id,attr"`
+	Name          string      `xml:"name,attr"`
+	Start         string      `xml:"start,attr"`
+	Duration      string      `xml:"duration,attr"`
+	HasVideo      string      `xml:"hasVideo,attr"`
+	HasAudio      string      `xml:"hasAudio,attr"`
+	Format        string      `xml:"format,attr,omitempty"`
+	AudioSources  string      `xml:"audioSources,attr,omitempty"`
+	AudioChannels string      `xml:"audioChannels,attr,omitempty"`
+	AudioRate     string      `xml:"audioRate,attr,omitempty"`
+	MediaRep      FCPMediaRep `xml:"media-rep"`
+}
+
+type FCPMediaRep struct {
+	Kind string `xml:"kind,attr"`
+	Src  string `xml:"src,attr"`
+}
+
+type FCPLibrary struct {
+	Event FCPEvent `xml:"event"`
+}
+
+type FCPEvent struct {
+	Name    string     `xml:"name,attr"`
+	Project FCPProject `xml:"project"`
+}
+
+type FCPProject struct {
+	Name     string      `xml:"name,attr"`
+	Sequence FCPSequence `xml:"sequence"`
+}
+
+type FCPSequence struct {
+	Format   string   `xml:"format,attr"`
+	Duration string   `xml:"duration,attr"`
+	TCStart  string   `xml:"tcStart,attr"`
+	TCFormat string   `xml:"tcFormat,attr"`
+	Spine    FCPSpine `xml:"spine"`
+}
+
+type FCPSpine struct {
+	Clips []FCPAssetClip `xml:"asset-clip"`
+}
+
+type FCPAssetClip struct {
+	Name     string `xml:"name,attr"`
+	Ref      string `xml:"ref,attr"`
+	Offset   string `xml:"offset,attr"`
+	Start    string `xml:"start,attr"`
+	Duration string `xml:"duration,attr"`
+}
+
+// ------------------------------------------------------------
+// Helpers
+// ------------------------------------------------------------
+
+func getVideoExtension(videoURL string) string {
+	ext := strings.ToLower(filepath.Ext(videoURL))
+
+	switch ext {
+	case ".mp4", ".mov", ".webm":
+		return ext
+	default:
+		return ".mp4"
+	}
+}
+
+func sanitizeProjectName(name string) string {
+	var result strings.Builder
+
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z':
+			result.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			result.WriteRune(r)
+		case r >= '0' && r <= '9':
+			result.WriteRune(r)
+		case r == '-' || r == '_':
+			result.WriteRune(r)
+		default:
+			result.WriteRune('_')
+		}
+	}
+
+	value := strings.Trim(result.String(), "_")
+
+	if value == "" {
+		return "davinci_project"
+	}
+
+	return value
+}
+
+// FCPXML uses rational time values, for example:
+// 100/24s = 4 seconds and 4 frames at 24 FPS.
+
+func framesToFCPTime(frames int64, fps int) string {
+	return fmt.Sprintf("%d/%ds", frames, fps)
+}
+
+// ------------------------------------------------------------
+// Video download
+// ------------------------------------------------------------
+
+func downloadVideo(videoURL string, destPath string) error {
+	req, err := http.NewRequest(http.MethodGet, videoURL, nil)
 	if err != nil {
-		return 0, fmt.Errorf("video file not found: %w", err)
-	}
-	if fileInfo.Size() < 1024 { // Less than 1KB is definitely not a valid video
-		return 0, fmt.Errorf("video file is too small (%d bytes), likely corrupted or incomplete download", fileInfo.Size())
+		return fmt.Errorf("create request: %w", err)
 	}
 
-	// 2. Method 1: Try standard format duration (works for most MP4s)
-	duration, err := probeDuration(videoPath, "format=duration")
-	if err == nil && duration > 0 {
-		return duration, nil
+	req.Header.Set(
+		"User-Agent",
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
+	)
+
+	client := &http.Client{
+		Timeout: 10 * time.Minute,
 	}
 
-	// 3. Method 2: Try stream duration (works for some WebMs where format duration is N/A)
-	duration, err = probeDuration(videoPath, "stream=duration")
-	if err == nil && duration > 0 {
-		return duration, nil
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("download request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+
+		return fmt.Errorf(
+			"HTTP %d: %s",
+			resp.StatusCode,
+			string(body),
+		)
 	}
 
-	// 4. Method 3: Try packet duration (last resort for malformed containers)
-	duration, err = probeDuration(videoPath, "packet=duration_time")
-	if err == nil && duration > 0 {
-		// packet duration_time is per-packet, so we need to sum them or use a different approach
-		// For simplicity, we'll fall back to estimation
+	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+		return err
 	}
 
-	// 5. Method 4: Estimate duration from file size (rough fallback)
-	// Assuming average bitrate of 2 Mbps (250 KB/s) for web videos
-	estimatedDuration := float64(fileInfo.Size()) / 250000.0
-	if estimatedDuration > 0 {
-		fmt.Printf("[WARN] Could not determine exact duration for %s, estimating %.2f seconds based on file size\n", videoPath, estimatedDuration)
-		return estimatedDuration, nil
+	file, err := os.Create(destPath)
+	if err != nil {
+		return err
 	}
 
-	// 6. Ultimate fallback: Return a default duration
-	fmt.Printf("[WARN] Could not determine duration for %s, using default 10 seconds\n", videoPath)
-	return 10.0, nil
+	_, copyErr := io.Copy(file, resp.Body)
+	closeErr := file.Close()
+
+	if copyErr != nil {
+		os.Remove(destPath)
+		return copyErr
+	}
+
+	if closeErr != nil {
+		os.Remove(destPath)
+		return closeErr
+	}
+
+	return nil
 }
 
-// probeDuration is a helper that runs ffprobe with a specific query
-func probeDuration(videoPath string, showEntries string) (float64, error) {
-	cmd := exec.Command("ffprobe",
+// ------------------------------------------------------------
+// Probe duration
+// ------------------------------------------------------------
+
+func getVideoDuration(videoPath string) (float64, error) {
+	cmd := exec.Command(
+		"ffprobe",
 		"-v", "error",
-		"-show_entries", showEntries,
+		"-show_entries", "format=duration",
 		"-of", "default=noprint_wrappers=1:nokey=1",
 		videoPath,
 	)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return 0, fmt.Errorf("ffprobe failed: %w, details: %s", err, string(output))
+		return 0, fmt.Errorf(
+			"ffprobe failed: %w: %s",
+			err,
+			string(output),
+		)
 	}
 
-	durationStr := strings.TrimSpace(string(output))
+	value := strings.TrimSpace(string(output))
 
-	// Handle "N/A" or empty responses
-	if durationStr == "" || durationStr == "N/A" || durationStr == "n/a" {
-		return 0, fmt.Errorf("ffprobe returned N/A for duration")
-	}
-
-	duration, err := strconv.ParseFloat(durationStr, 64)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse duration '%s': %w", durationStr, err)
-	}
-
-	if duration <= 0 {
-		return 0, fmt.Errorf("invalid duration value: %.2f", duration)
+	duration, err := strconv.ParseFloat(value, 64)
+	if err != nil || duration <= 0 ||
+		math.IsNaN(duration) || math.IsInf(duration, 0) {
+		return 0, fmt.Errorf(
+			"invalid video duration: %q",
+			value,
+		)
 	}
 
 	return duration, nil
 }
 
-// DownloadVideo downloads a video from URL to a local file.
-// Note: Capital 'D' makes it exported so your controllers package can call it.
-func downloadVideo(url string, destPath string) error {
-	// 1. Create a custom request to set a standard browser User-Agent
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
+func videoHasAudio(videoPath string) bool {
+	cmd := exec.Command(
+		"ffprobe",
+		"-v", "error",
+		"-select_streams", "a",
+		"-show_entries", "stream=index",
+		"-of", "csv=p=0",
+		videoPath,
+	)
 
-	// CRITICAL: Many CDNs block the default "Go-http-client/1.1" User-Agent.
-	// Spoofing a standard Chrome browser guarantees the CDN will serve the file.
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36")
-
-	// 2. Use a custom HTTP client with a timeout to prevent server hangs
-	client := &http.Client{
-		Timeout: 5 * time.Minute, // Generous timeout for large video files
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to download video: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// 3. Check for successful status code
-	if resp.StatusCode != http.StatusOK {
-		// Read a tiny bit of the response body to capture the actual error message
-		// (e.g., a Cloudflare 403 HTML page) for better debugging.
-		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
-		return fmt.Errorf("download failed with status: %d %s (Details: %s)",
-			resp.StatusCode, http.StatusText(resp.StatusCode), string(bodyBytes))
-	}
-
-	// 4. Ensure the destination directory exists before creating the file
-	// (Prevents "no such file or directory" errors if the temp folder structure is deep)
-	destDir := filepath.Dir(destPath)
-	if err := os.MkdirAll(destDir, 0755); err != nil {
-		return fmt.Errorf("failed to create destination directory: %w", err)
-	}
-
-	// 5. Create the file and copy the data
-	file, err := os.Create(destPath)
-	if err != nil {
-		return fmt.Errorf("failed to create file: %w", err)
-	}
-	defer file.Close()
-
-	_, err = io.Copy(file, resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to write video to disk: %w", err)
-	}
-
-	return nil
+	output, err := cmd.Output()
+	return err == nil && strings.TrimSpace(string(output)) != ""
 }
 
+// ------------------------------------------------------------
+// FCPXML generation
+// ------------------------------------------------------------
+
+func generateFCPXML(
+	projectName string,
+	clips []ExportClip,
+	fps int,
+) ([]byte, error) {
+
+	if fps <= 0 {
+		return nil, fmt.Errorf("invalid FPS")
+	}
+
+	// Sequence format.
+	format := FCPFormat{
+		ID:            "r1",
+		Name:          fmt.Sprintf("FFVideoFormat1080p%d", fps),
+		FrameDuration: fmt.Sprintf("1/%ds", fps),
+		Width:         1920,
+		Height:        1080,
+	}
+
+	var assets []FCPAsset
+	var timelineClips []FCPAssetClip
+
+	var timelineFrames int64 = 0
+
+	for _, clip := range clips {
+
+		duration := framesToFCPTime(clip.Frames, fps)
+
+		// Each source has a distinct resource ID.
+		asset := FCPAsset{
+			ID:       clip.ResourceID,
+			Name:     clip.Filename,
+			Start:    "0s",
+			Duration: duration,
+			HasVideo: "1",
+			HasAudio: "0",
+			Format:   "r1",
+			MediaRep: FCPMediaRep{
+				Kind: "original-media",
+
+				// Relative media URL: the XML and media files
+				// are packaged together in the ZIP.
+				Src: clip.Filename,
+			},
+		}
+
+		if clip.HasAudio {
+			asset.HasAudio = "1"
+			asset.AudioSources = "1"
+			asset.AudioChannels = "2"
+			asset.AudioRate = "48000"
+		}
+
+		assets = append(assets, asset)
+
+		// The offset is the timeline position.
+		timelineClip := FCPAssetClip{
+			Name:     clip.Shot.Name,
+			Ref:      clip.ResourceID,
+			Offset:   framesToFCPTime(timelineFrames, fps),
+			Start:    "0s",
+			Duration: duration,
+		}
+
+		timelineClips = append(timelineClips, timelineClip)
+
+		fmt.Printf(
+			"[FCPXML] %s -> %s | Resource=%s | Offset=%s | Duration=%s\n",
+			clip.Shot.Name,
+			clip.Filename,
+			clip.ResourceID,
+			timelineClip.Offset,
+			duration,
+		)
+
+		timelineFrames += clip.Frames
+	}
+
+	xmlDocument := FCPXML{
+		Version: "1.9",
+
+		Resources: FCPResources{
+			Format: format,
+			Assets: assets,
+		},
+
+		Library: FCPLibrary{
+			Event: FCPEvent{
+				Name: projectName,
+
+				Project: FCPProject{
+					Name: projectName,
+
+					Sequence: FCPSequence{
+						Format:   "r1",
+						Duration: framesToFCPTime(timelineFrames, fps),
+						TCStart:  "0s",
+						TCFormat: "NDF",
+
+						Spine: FCPSpine{
+							Clips: timelineClips,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	output, err := xml.MarshalIndent(
+		xmlDocument,
+		"",
+		"    ",
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("XML encoding failed: %w", err)
+	}
+
+	header := []byte(xml.Header)
+
+	return append(header, output...), nil
+}
+
+// ------------------------------------------------------------
+// Main controller
+// ------------------------------------------------------------
+
 func (ac *ApiController) ExportWorkspaceDaVinciPackage(c *gin.Context) {
+
 	domain := c.GetHeader("X-Vuedoo-Domain")
 	accessKey := c.GetHeader("X-Vuedoo-Access-Key")
 	slug := c.Param("slug")
 
-	var request struct {
-		ProjectName string `json:"projectName" binding:"required"`
-		FPS         int    `json:"fps"`
-		Timeline    []struct {
-			ID          int    `json:"id"`
-			Name        string `json:"name"`
-			Video       string `json:"video"`
-			Description string `json:"description"`
-			Sequence    int    `json:"sequence"`
-		} `json:"timeline" binding:"required"`
-	}
+	var request DaVinciExportRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "fail", "error": "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "fail",
+			"error":  "Invalid request: " + err.Error(),
+		})
 		return
 	}
 
-	databaseManager, dErr := services.NewDatabaseManager(ac.db, domain, accessKey)
-	if dErr != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"status": "fail", "error": "Invalid credentials"})
-		return
-	}
-
-	userID := databaseManager.GetCurrentUser()
-	workspace, err := databaseManager.GetBlock(userID, "workspace", 0, slug, 0)
-	if err != nil || workspace == nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "fail", "error": "Workspace not found"})
+	if len(request.Timeline) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "fail",
+			"error":  "No timeline clips supplied",
+		})
 		return
 	}
 
@@ -1396,168 +1678,267 @@ func (ac *ApiController) ExportWorkspaceDaVinciPackage(c *gin.Context) {
 		request.FPS = 24
 	}
 
-	tempDir, err := os.MkdirTemp("", "davinci_export_*")
+	if request.FPS > 60 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "fail",
+			"error":  "Unsupported FPS",
+		})
+		return
+	}
+
+	// Validate workspace.
+	databaseManager, dErr := services.NewDatabaseManager(
+		ac.db,
+		domain,
+		accessKey,
+	)
+
+	if dErr != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"status": "fail",
+			"error":  "Invalid credentials",
+		})
+		return
+	}
+
+	userID := databaseManager.GetCurrentUser()
+
+	workspace, err := databaseManager.GetBlock(
+		userID,
+		"workspace",
+		0,
+		slug,
+		0,
+	)
+
+	if err != nil || workspace == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"status": "fail",
+			"error":  "Workspace not found",
+		})
+		return
+	}
+
+	// Sort by sequence.
+	sort.SliceStable(request.Timeline, func(i, j int) bool {
+		return request.Timeline[i].Sequence <
+			request.Timeline[j].Sequence
+	})
+
+	tempDir, err := os.MkdirTemp("", "fcpxml_export_*")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "Failed to create temp directory"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "fail",
+			"error":  "Cannot create temporary directory",
+		})
 		return
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Download videos and build EDL entries
-	var edlEntries []string
+	// --------------------------------------------------------
+	// STEP 1: Download media and create unique resources.
+	// --------------------------------------------------------
 
-	// CORRECTION 1 : Le timecode d'une timeline de montage commence conventionnellement à 01:00:00:00 dans Resolve
-	currentTimelineOffset := 3600.0
+	clips := make([]ExportClip, 0, len(request.Timeline))
 
-	// EDL Header
-	edlEntries = append(edlEntries, fmt.Sprintf("TITLE: %s", request.ProjectName))
-	edlEntries = append(edlEntries, "FCM: NON-DROP FRAME")
-	edlEntries = append(edlEntries, "")
+	for index, shot := range request.Timeline {
 
-	// Stockage des fichiers téléchargés avec succès pour éviter de recalculer les noms dans la boucle ZIP
-	type downloadedVideo struct {
-		filename string
-		path     string
-	}
-	var downloadedVideos []downloadedVideo
-
-	for i, shot := range request.Timeline {
-		ext := strings.ToLower(filepath.Ext(shot.Video))
-		if ext == "" || (ext != ".mp4" && ext != ".webm" && ext != ".mov") {
-			ext = ".mp4"
+		if strings.TrimSpace(shot.Video) == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"status": "fail",
+				"error": fmt.Sprintf(
+					"Missing video URL for shot %d",
+					shot.ID,
+				),
+			})
+			return
 		}
 
-		reg := regexp.MustCompile(`[^a-zA-Z0-9_-]+`)
-		safeShotName := reg.ReplaceAllString(shot.Name, "_")
-		filename := fmt.Sprintf("%s%s", safeShotName, ext)
+		// Unique resource ID for every timeline occurrence.
+		resourceID := fmt.Sprintf("r%d", index+2)
+
+		// Unique filename, independent of shot.Name and shot.ID.
+		ext := getVideoExtension(shot.Video)
+		filename := fmt.Sprintf("media_%04d%s", index+1, ext)
+
 		videoPath := filepath.Join(tempDir, filename)
 
-		fmt.Printf("[EXPORT] Downloading video for shot %d: %s\n", shot.ID, shot.Video)
-		err := downloadVideo(shot.Video, videoPath)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status": "fail",
-				"error":  fmt.Sprintf("Failed to download video for shot %d: %s", shot.ID, err.Error()),
-			})
-			return
-		}
-
-		durationSeconds, err := getVideoDuration(videoPath)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status": "fail",
-				"error":  fmt.Sprintf("Failed to get duration for shot %d: %s", shot.ID, err.Error()),
-			})
-			return
-		}
-
-		fmt.Printf("[EXPORT] Shot %d duration: %.2f seconds\n", shot.ID, durationSeconds)
-
-		// Enregistrement pour l'étape de compression ZIP
-		downloadedVideos = append(downloadedVideos, downloadedVideo{filename: filename, path: videoPath})
-
-		// CORRECTION 2 : Inversion et remappage correct des Timecodes au standard CMX 3600
-		// Source/Clip originel (Démarre à 0 et se termine à la fin de sa propre durée)
-		srcStartTC := "00:00:00:00"
-		srcEndTC := secondsToTimecode(durationSeconds, request.FPS)
-
-		// Destination/Timeline (Se positionne à la suite sur la piste de montage globale)
-		recStartTC := secondsToTimecode(currentTimelineOffset, request.FPS)
-		recEndTC := secondsToTimecode(currentTimelineOffset+durationSeconds, request.FPS)
-
-		// CORRECTION 3 : L'index de l'événement (i+1) doit être incrémental et strict (001, 002, 003...)
-		edlEntry := fmt.Sprintf("%03d  AX       V     C        %s %s %s %s",
-			i+1,
-			srcStartTC,
-			srcEndTC,
-			recStartTC,
-			recEndTC,
+		fmt.Printf(
+			"[DOWNLOAD] Sequence=%d ID=%d File=%s\n",
+			shot.Sequence,
+			shot.ID,
+			filename,
 		)
-		edlEntries = append(edlEntries, edlEntry)
-		edlEntries = append(edlEntries, fmt.Sprintf("* FROM CLIP NAME: %s", filename))
-		if shot.Description != "" {
-			edlEntries = append(edlEntries, fmt.Sprintf("* COMMENT: %s", shot.Description))
-		}
-		edlEntries = append(edlEntries, "")
 
-		currentTimelineOffset += durationSeconds
+		if err := downloadVideo(shot.Video, videoPath); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status": "fail",
+				"error": fmt.Sprintf(
+					"Failed downloading shot %d: %v",
+					shot.ID,
+					err,
+				),
+			})
+			return
+		}
+
+		duration, err := getVideoDuration(videoPath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status": "fail",
+				"error": fmt.Sprintf(
+					"Failed reading duration of shot %d: %v",
+					shot.ID,
+					err,
+				),
+			})
+			return
+		}
+
+		// Convert to integer project frames.
+		frames := int64(math.Round(
+			duration * float64(request.FPS),
+		))
+
+		if frames <= 0 {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status": "fail",
+				"error":  "Invalid clip duration",
+			})
+			return
+		}
+
+		clips = append(clips, ExportClip{
+			Shot:       shot,
+			ResourceID: resourceID,
+			Filename:   filename,
+			VideoPath:  videoPath,
+			Duration:   duration,
+			Frames:     frames,
+			HasAudio:   videoHasAudio(videoPath),
+		})
 	}
 
-	// Write EDL file
-	edlContent := strings.Join(edlEntries, "\n")
-	safeProjectName := regexp.MustCompile(`[^a-zA-Z0-9_-]+`).ReplaceAllString(request.ProjectName, "_")
-	edlFilename := fmt.Sprintf("%s.edl", safeProjectName)
-	edlPath := filepath.Join(tempDir, edlFilename)
+	// --------------------------------------------------------
+	// STEP 2: Generate FCPXML.
+	// --------------------------------------------------------
 
-	if err := os.WriteFile(edlPath, []byte(edlContent), 0644); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "Failed to write EDL file"})
+	projectName := sanitizeProjectName(request.ProjectName)
+
+	xmlContent, err := generateFCPXML(
+		projectName,
+		clips,
+		request.FPS,
+	)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "fail",
+			"error":  "FCPXML generation failed: " + err.Error(),
+		})
 		return
 	}
 
-	// Create ZIP with EDL and videos
-	zipFilename := fmt.Sprintf("%s_davinci_package.zip", safeProjectName)
+	xmlFilename := projectName + ".fcpxml"
+	xmlPath := filepath.Join(tempDir, xmlFilename)
+
+	if err := os.WriteFile(
+		xmlPath,
+		xmlContent,
+		0644,
+	); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "fail",
+			"error":  "Failed to write FCPXML",
+		})
+		return
+	}
+
+	// --------------------------------------------------------
+	// STEP 3: Create ZIP containing XML and media.
+	// --------------------------------------------------------
+
+	zipFilename := projectName + "_fcpxml_package.zip"
 	zipPath := filepath.Join(tempDir, zipFilename)
 
 	zipFile, err := os.Create(zipPath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "Failed to create ZIP file"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "fail",
+			"error":  "Failed to create ZIP",
+		})
 		return
 	}
-	defer zipFile.Close() // Sécurité sur le descripteur de fichier principal
 
 	zipWriter := zip.NewWriter(zipFile)
-	defer zipWriter.Close() // Assure la fermeture propre du flux ZIP à la sortie de la fonction
 
-	// Add EDL to ZIP
-	edlWriter, err := zipWriter.Create(edlFilename)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "Failed to add EDL to ZIP"})
+	// Add FCPXML.
+	xmlWriter, err := zipWriter.Create(xmlFilename)
+	if err == nil {
+		_, err = xmlWriter.Write(xmlContent)
+	}
+
+	// Add every media file using the same filename
+	// referenced by its corresponding FCPXML resource.
+	if err == nil {
+		for _, clip := range clips {
+
+			videoFile, openErr := os.Open(clip.VideoPath)
+			if openErr != nil {
+				err = openErr
+				break
+			}
+
+			videoWriter, createErr := zipWriter.Create(clip.Filename)
+			if createErr != nil {
+				videoFile.Close()
+				err = createErr
+				break
+			}
+
+			_, copyErr := io.Copy(videoWriter, videoFile)
+			closeErr := videoFile.Close()
+
+			if copyErr != nil {
+				err = copyErr
+				break
+			}
+
+			if closeErr != nil {
+				err = closeErr
+				break
+			}
+
+			fmt.Printf("[ZIP] Added %s\n", clip.Filename)
+		}
+	}
+
+	zipCloseErr := zipWriter.Close()
+	fileCloseErr := zipFile.Close()
+
+	if err != nil || zipCloseErr != nil || fileCloseErr != nil {
+		finalErr := err
+		if finalErr == nil {
+			finalErr = zipCloseErr
+		}
+		if finalErr == nil {
+			finalErr = fileCloseErr
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "fail",
+			"error":  "ZIP generation failed: " + finalErr.Error(),
+		})
 		return
 	}
-	if _, err := edlWriter.Write([]byte(edlContent)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "Failed to write EDL content into ZIP"})
-		return
-	}
 
-	// CORRECTION 4 : Utilisation du tableau propre 'downloadedVideos' pour éviter la redondance inutile
-	for _, video := range downloadedVideos {
-		videoFile, err := os.Open(video.path)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "Failed to open video file"})
-			return
-		}
-
-		videoWriter, err := zipWriter.Create(video.filename)
-		if err != nil {
-			videoFile.Close()
-			c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "Failed to add video to ZIP"})
-			return
-		}
-
-		_, err = io.Copy(videoWriter, videoFile)
-		videoFile.Close() // Fermeture immédiate dans la boucle après copie
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "error": "Failed to write video to ZIP"})
-			return
-		}
-	}
-
-	// Fermeture explicite avant l'envoi du fichier via Gin pour purger les buffers sur le disque
-	zipWriter.Close()
-	zipFile.Close()
+	fmt.Printf(
+		"[EXPORT] FCPXML complete: %d clips, FPS=%d\n",
+		len(clips),
+		request.FPS,
+	)
 
 	c.FileAttachment(zipPath, zipFilename)
-}
-
-// Helper function to convert seconds to timecode
-func secondsToTimecode(seconds float64, fps int) string {
-	totalFrames := int(seconds * float64(fps))
-	hours := totalFrames / (3600 * fps)
-	minutes := (totalFrames % (3600 * fps)) / (60 * fps)
-	secs := (totalFrames % (60 * fps)) / fps
-	frames := totalFrames % fps
-
-	return fmt.Sprintf("%02d:%02d:%02d:%02d", hours, minutes, secs, frames)
 }
 
 func (ac *ApiController) GetThread(c *gin.Context) {
